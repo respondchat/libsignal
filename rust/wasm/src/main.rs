@@ -1,3 +1,7 @@
+fn main() {
+    println!("Hello, world!");
+}
+
 use libsignal_core::ServiceId;
 use wasm_bindgen::prelude::*;
 use zkgroup::groups::{GroupMasterKey, GroupSecretParams};
@@ -23,6 +27,3 @@ pub fn group_secret_params_encrypt_service_id(val: JsValue, service_string: Stri
 
     return serde_wasm_bindgen::to_value(&public).unwrap();
 }
-
-// #[wasm_bindgen]
-// pub fn generate_key() -> JsValue {}

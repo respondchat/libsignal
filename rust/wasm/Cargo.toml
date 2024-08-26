@@ -14,7 +14,3 @@ poksho = { path = "../poksho" }
 signal-crypto = { path = "../crypto" }
 zkcredential = { path = "../zkcredential", features = ["rayon"] }
 zkgroup = { path = "../zkgroup", features = [] }
-
-
-[lib]
-crate-type = ["cdylib"]
