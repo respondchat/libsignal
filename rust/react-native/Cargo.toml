@@ -1,0 +1,38 @@
+[package]
+name = "react-native"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aes-gcm-siv = "0.11.1"
+getrandom = { version = "0.2", features = ["js"] }
+libsignal-protocol = { path = "../protocol" }
+libsignal-core = { path = "../core" }
+poksho = { path = "../poksho" }
+signal-crypto = { path = "../crypto" }
+zkcredential = { path = "../zkcredential", features = ["rayon"] }
+zkgroup = { path = "../zkgroup", features = [] }
+jsi = "0.3.0-alpha.5"
+anyhow = { version = "1.0", features = ["backtrace"], default-features = true }
+jni = "0.21.1"
+cxx = "1.0.106"
+serde = { version = "1.0", features = ["derive"] }
+rand = "0.8"
+uuid = "1.1.2"
+futures = "0.3"
+
+[lib]
+# Android requires dynamic libraries, and iOS requires static ones
+crate-type = ["cdylib", "staticlib"]
+
+[target.aarch64-linux-android]
+ar = "/Users/user/Developer/respond/libsignal-typescript/libsignal/rust/react-native/NDK/arm64/bin/aarch64-linux-android-ar"
+linker = "/Users/user/Developer/respond/libsignal-typescript/libsignal/rust/react-native/NDK/arm64/bin/aarch64-linux-android-clang"
+
+[target.armv7-linux-androideabi]
+ar = "/Users/user/Developer/respond/libsignal-typescript/libsignal/rust/react-native/NDK/arm/bin/arm-linux-androideabi-ar"
+linker = "/Users/user/Developer/respond/libsignal-typescript/libsignal/rust/react-native/NDK/arm/bin/arm-linux-androideabi-clang"
+
+[target.i686-linux-android]
+ar = "/Users/user/Developer/respond/libsignal-typescript/libsignal/rust/react-native/NDK/x86/bin/i686-linux-android-ar"
+linker = "/Users/user/Developer/respond/libsignal-typescript/libsignal/rust/react-native/NDK/x86/bin/i686-linux-android-clang"

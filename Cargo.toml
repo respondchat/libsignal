@@ -18,7 +18,8 @@ members = [
     "rust/bridge/ffi",
     "rust/bridge/jni",
     "rust/bridge/jni/testing",
-    "rust/bridge/node", "rust/wasm",
+    "rust/bridge/node",
+    "rust/react-native",
 ]
 default-members = [
     "rust/crypto",

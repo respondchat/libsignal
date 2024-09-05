@@ -12,126 +12,126 @@ type Uuid = Buffer;
 type Timestamp = number;
 
 interface LookupResponse {
-  entries: Map<string, LookupResponseEntry>;
-  debugPermitsUsed: number;
+	entries: Map<string, LookupResponseEntry>;
+	debugPermitsUsed: number;
 }
 
 interface LookupResponseEntry {
-  readonly aci: string | undefined;
-  readonly pni: string | undefined;
+	readonly aci: string | undefined;
+	readonly pni: string | undefined;
 }
 
 interface ChatResponse {
-  status: number;
-  message: string | undefined;
-  headers: ReadonlyArray<[string, string]>;
-  body: Buffer | undefined;
+	status: number;
+	message: string | undefined;
+	headers: ReadonlyArray<[string, string]>;
+	body: Buffer | undefined;
 }
 
 interface ChatServiceDebugInfo {
-  ipType: number;
-  durationMillis: number;
-  connectionInfo: string;
+	ipType: number;
+	durationMillis: number;
+	connectionInfo: string;
 }
 
 interface ResponseAndDebugInfo {
-  response: ChatResponse;
-  debugInfo: ChatServiceDebugInfo;
+	response: ChatResponse;
+	debugInfo: ChatServiceDebugInfo;
 }
 
 interface SealedSenderMultiRecipientMessageRecipient {
-  deviceIds: number[];
-  registrationIds: number[];
-  rangeOffset: number;
-  rangeLen: number;
+	deviceIds: number[];
+	registrationIds: number[];
+	rangeOffset: number;
+	rangeLen: number;
 }
 
 interface SealedSenderMultiRecipientMessage {
-  recipientMap: {
-    [serviceId: string]: SealedSenderMultiRecipientMessageRecipient;
-  };
-  excludedRecipients: string[];
-  offsetOfSharedData: number;
+	recipientMap: {
+		[serviceId: string]: SealedSenderMultiRecipientMessageRecipient;
+	};
+	excludedRecipients: string[];
+	offsetOfSharedData: number;
 }
 
 export abstract class IdentityKeyStore {
-  _getIdentityKey(): Promise<PrivateKey>;
-  _getLocalRegistrationId(): Promise<number>;
-  _saveIdentity(name: ProtocolAddress, key: PublicKey): Promise<boolean>;
-  _isTrustedIdentity(
-    name: ProtocolAddress,
-    key: PublicKey,
-    sending: boolean
-  ): Promise<boolean>;
-  _getIdentity(name: ProtocolAddress): Promise<PublicKey | null>;
+	_getIdentityKey(): Promise<PrivateKey>;
+	_getLocalRegistrationId(): Promise<number>;
+	_saveIdentity(name: ProtocolAddress, key: PublicKey): Promise<boolean>;
+	_isTrustedIdentity(
+		name: ProtocolAddress,
+		key: PublicKey,
+		sending: boolean
+	): Promise<boolean>;
+	_getIdentity(name: ProtocolAddress): Promise<PublicKey | null>;
 }
 
 export abstract class SessionStore {
-  _saveSession(addr: ProtocolAddress, record: SessionRecord): Promise<void>;
-  _getSession(addr: ProtocolAddress): Promise<SessionRecord | null>;
+	_saveSession(addr: ProtocolAddress, record: SessionRecord): Promise<void>;
+	_getSession(addr: ProtocolAddress): Promise<SessionRecord | null>;
 }
 
 export abstract class PreKeyStore {
-  _savePreKey(preKeyId: number, record: PreKeyRecord): Promise<void>;
-  _getPreKey(preKeyId: number): Promise<PreKeyRecord>;
-  _removePreKey(preKeyId: number): Promise<void>;
+	_savePreKey(preKeyId: number, record: PreKeyRecord): Promise<void>;
+	_getPreKey(preKeyId: number): Promise<PreKeyRecord>;
+	_removePreKey(preKeyId: number): Promise<void>;
 }
 
 export abstract class SignedPreKeyStore {
-  _saveSignedPreKey(
-    signedPreKeyId: number,
-    record: SignedPreKeyRecord
-  ): Promise<void>;
-  _getSignedPreKey(signedPreKeyId: number): Promise<SignedPreKeyRecord>;
+	_saveSignedPreKey(
+		signedPreKeyId: number,
+		record: SignedPreKeyRecord
+	): Promise<void>;
+	_getSignedPreKey(signedPreKeyId: number): Promise<SignedPreKeyRecord>;
 }
 
 export abstract class KyberPreKeyStore {
-  _saveKyberPreKey(
-    kyberPreKeyId: number,
-    record: KyberPreKeyRecord
-  ): Promise<void>;
-  _getKyberPreKey(kyberPreKeyId: number): Promise<KyberPreKeyRecord>;
-  _markKyberPreKeyUsed(kyberPreKeyId: number): Promise<void>;
+	_saveKyberPreKey(
+		kyberPreKeyId: number,
+		record: KyberPreKeyRecord
+	): Promise<void>;
+	_getKyberPreKey(kyberPreKeyId: number): Promise<KyberPreKeyRecord>;
+	_markKyberPreKeyUsed(kyberPreKeyId: number): Promise<void>;
 }
 
 export abstract class SenderKeyStore {
-  _saveSenderKey(
-    sender: ProtocolAddress,
-    distributionId: Uuid,
-    record: SenderKeyRecord
-  ): Promise<void>;
-  _getSenderKey(
-    sender: ProtocolAddress,
-    distributionId: Uuid
-  ): Promise<SenderKeyRecord | null>;
+	_saveSenderKey(
+		sender: ProtocolAddress,
+		distributionId: Uuid,
+		record: SenderKeyRecord
+	): Promise<void>;
+	_getSenderKey(
+		sender: ProtocolAddress,
+		distributionId: Uuid
+	): Promise<SenderKeyRecord | null>;
 }
 
 export abstract class InputStream {
-  _read(amount: number): Promise<Buffer>;
-  _skip(amount: number): Promise<void>;
+	_read(amount: number): Promise<Buffer>;
+	_skip(amount: number): Promise<void>;
 }
 
-export abstract class SyncInputStream extends Buffer {}
+export abstract class SyncInputStream extends Buffer { }
 
 export abstract class ChatListener {
-  _incoming_message(
-    envelope: Buffer,
-    timestamp: number,
-    ack: ServerMessageAck
-  ): void;
-  _queue_empty(): void;
-  _connection_interrupted(): void;
+	_incoming_message(
+		envelope: Buffer,
+		timestamp: number,
+		ack: ServerMessageAck
+	): void;
+	_queue_empty(): void;
+	_connection_interrupted(): void;
 }
 
-export abstract class MakeChatListener extends ChatListener {}
+export abstract class MakeChatListener extends ChatListener { }
 
 type Wrapper<T> = Readonly<{
-  _nativeHandle: T;
+	_nativeHandle: T;
 }>;
 
 interface MessageBackupValidationOutcome {
-  errorMessage: string | null;
-  unknownFieldMessages: Array<string>;
+	errorMessage: string | null;
+	unknownFieldMessages: Array<string>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -270,7 +270,7 @@ export function HsmEnclaveClient_InitialRequest(obj: Wrapper<HsmEnclaveClient>):
 export function HsmEnclaveClient_New(trustedPublicKey: Buffer, trustedCodeHashes: Buffer): HsmEnclaveClient;
 export function HttpRequest_add_header(request: Wrapper<HttpRequest>, name: string, value: string): void;
 export function HttpRequest_new(method: string, path: string, bodyAsSlice: Buffer | null): HttpRequest;
-export function IdentityKeyPair_Deserialize(buffer: Buffer): {publicKey:PublicKey,privateKey:PrivateKey};
+export function IdentityKeyPair_Deserialize(buffer: Buffer): { publicKey: PublicKey, privateKey: PrivateKey };
 export function IdentityKeyPair_Serialize(publicKey: Wrapper<PublicKey>, privateKey: Wrapper<PrivateKey>): Buffer;
 export function IdentityKeyPair_SignAlternateIdentity(publicKey: Wrapper<PublicKey>, privateKey: Wrapper<PrivateKey>, otherIdentity: Wrapper<PublicKey>): Buffer;
 export function IdentityKey_VerifyAlternateIdentity(publicKey: Wrapper<PublicKey>, otherIdentity: Wrapper<PublicKey>, signature: Buffer): boolean;
@@ -396,8 +396,8 @@ export function SenderCertificate_GetSenderUuid(obj: Wrapper<SenderCertificate>)
 export function SenderCertificate_GetSerialized(obj: Wrapper<SenderCertificate>): Buffer;
 export function SenderCertificate_GetServerCertificate(cert: Wrapper<SenderCertificate>): ServerCertificate;
 export function SenderCertificate_GetSignature(obj: Wrapper<SenderCertificate>): Buffer;
-export function SenderCertificate_New(senderUuid: string, senderE164: string | null, senderDeviceId: number, senderKey: Wrapper<PublicKey>, expiration: Timestamp, signerCert: Wrapper<ServerCertificate>, signerKey: Wrapper<PrivateKey>): SenderCertificate;
 export function SenderCertificate_Validate(cert: Wrapper<SenderCertificate>, key: Wrapper<PublicKey>, time: Timestamp): boolean;
+export function SenderCertificate_New(senderUuid: string, senderE164: string | null, senderDeviceId: number, senderKey: Wrapper<PublicKey>, expiration: Timestamp, signerCert: Wrapper<ServerCertificate>, signerKey: Wrapper<PrivateKey>): SenderCertificate;
 export function SenderKeyDistributionMessage_Create(sender: Wrapper<ProtocolAddress>, distributionId: Uuid, store: SenderKeyStore): Promise<SenderKeyDistributionMessage>;
 export function SenderKeyDistributionMessage_Deserialize(data: Buffer): SenderKeyDistributionMessage;
 export function SenderKeyDistributionMessage_GetChainId(obj: Wrapper<SenderKeyDistributionMessage>): number;
