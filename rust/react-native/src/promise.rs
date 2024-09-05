@@ -41,6 +41,7 @@ impl SendableRuntimeHandle {
 }
 
 unsafe impl Send for SendableRuntimeHandle {}
+unsafe impl Sync for SendableRuntimeHandle {}
 
 pub fn make_async<'rt>(
     rt: &mut jsi::RuntimeHandle<'rt>,

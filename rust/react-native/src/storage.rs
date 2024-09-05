@@ -1,14 +1,14 @@
+use async_trait::async_trait;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 
-use futures::lock::Mutex;
 use jsi::de::JsiDeserializeError;
 use jsi::{AsValue, FromObject, FromValue, JsiFn, JsiObject, JsiValue, PropName};
 use libsignal_core::ProtocolAddress;
-use libsignal_protocol::{SenderKeyRecord, SenderKeyStore};
+use libsignal_protocol::{SenderKeyRecord, SenderKeyStore, SignalProtocolError};
 use serde::de::Error;
 use uuid::Uuid;
 
@@ -52,7 +52,7 @@ pub async fn await_promise(
 struct CallbackFuture<T> {
     result: Arc<Mutex<Option<T>>>,
     waker: Arc<Mutex<Option<Waker>>>,
-    completed: Arc<AtomicBool>, // Wrap AtomicBool in Arc for safe cloning
+    completed: AtomicBool,
 }
 
 impl<T> Clone for CallbackFuture<T> {
@@ -60,7 +60,7 @@ impl<T> Clone for CallbackFuture<T> {
         CallbackFuture {
             result: Arc::clone(&self.result),
             waker: Arc::clone(&self.waker),
-            completed: Arc::clone(&self.completed),
+            completed: AtomicBool::new(false),
         }
     }
 }
@@ -104,27 +104,29 @@ pub struct JSISenderKeyStore {
     store_object: JsiObject<'static>,
     get_sender_key: JsiFn<'static>,
     save_sender_key: JsiFn<'static>,
-    rt: &'static mut jsi::RuntimeHandle<'static>,
+    rt: jsi::RuntimeHandle<'static>,
 }
 
 impl JSISenderKeyStore {
     pub fn new(
-        store_object: JsiValue,
-        rt: &mut jsi::RuntimeHandle,
+        store_object: JsiValue<'static>,
+        mut rt: jsi::RuntimeHandle<'static>,
     ) -> Result<Self, JsiDeserializeError> {
-        let store_object: JsiObject = JsiObject::from_value(&store_object, rt)
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
             .ok_or(JsiDeserializeError::custom("Expected an object"))?;
 
-        let getSenderKey: JsiValue = store_object.get(PropName::new("console", rt), rt)?;
-        let getSenderKey: JsiObject = JsiObject::from_value(&getSenderKey, rt)
+        let getSenderKey: JsiValue =
+            store_object.get(PropName::new("_getSenderKey", &mut rt), &mut rt);
+        let getSenderKey: JsiObject = JsiObject::from_value(&getSenderKey, &mut rt)
             .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let getSenderKey: JsiFn = JsiFn::from_object(&getSenderKey, rt)
+        let getSenderKey: JsiFn = JsiFn::from_object(&getSenderKey, &mut rt)
             .ok_or(JsiDeserializeError::custom("Expected a function"))?;
 
-        let saveSenderKey: JsiValue = store_object.get(PropName::new("console", rt), rt)?;
-        let saveSenderKey: JsiObject = JsiObject::from_value(&saveSenderKey, rt)
+        let saveSenderKey: JsiValue =
+            store_object.get(PropName::new("_saveSenderKey", &mut rt), &mut rt);
+        let saveSenderKey: JsiObject = JsiObject::from_value(&saveSenderKey, &mut rt)
             .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let saveSenderKey: JsiFn = JsiFn::from_object(&saveSenderKey, rt)
+        let saveSenderKey: JsiFn = JsiFn::from_object(&saveSenderKey, &mut rt)
             .ok_or(JsiDeserializeError::custom("Expected a function"))?;
 
         Ok(Self {
@@ -180,18 +182,14 @@ impl JSISenderKeyStore {
         let record = record.serialize().map_err(|e| e.to_string())?;
         let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
 
-        let result = self
+        let promise = self
             .save_sender_key
             .call([nativeAddress, distribution_id, record], rt)
             .map_err(|e| e.to_string())?;
 
-        Ok(())
-    }
-}
+        await_promise(rt, promise).await?;
 
-impl Finalize for JSISenderKeyStore {
-    fn finalize<'a, C: Context<'a>>(self, cx: &mut C) {
-        self.store_object.finalize(cx)
+        Ok(())
     }
 }
 
@@ -204,7 +202,7 @@ impl SenderKeyStore for JSISenderKeyStore {
     ) -> Result<Option<SenderKeyRecord>, SignalProtocolError> {
         self.do_get_sender_key(sender.clone(), distribution_id)
             .await
-            .map_err(|s| js_error_to_rust("getSenderKey", s))
+            .map_err(|s| SignalProtocolError::SessionNotFound(sender.clone()))
     }
 
     async fn store_sender_key(
@@ -215,6 +213,9 @@ impl SenderKeyStore for JSISenderKeyStore {
     ) -> Result<(), SignalProtocolError> {
         self.do_save_sender_key(sender.clone(), distribution_id, record.clone())
             .await
-            .map_err(|s| js_error_to_rust("saveSenderKey", s))
+            .map_err(|s| SignalProtocolError::SessionNotFound(sender.clone()))
     }
 }
+
+unsafe impl Send for JSISenderKeyStore {}
+unsafe impl Sync for JSISenderKeyStore {}

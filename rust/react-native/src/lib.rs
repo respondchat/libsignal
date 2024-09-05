@@ -7,9 +7,10 @@ use futures::executor;
 use std::borrow::Borrow;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::sleep_ms;
 use std::{any, fmt};
+use storage::JSISenderKeyStore;
 
 use aes_gcm_siv::aead::generic_array::typenum::Unsigned;
 use aes_gcm_siv::aead::AeadMutInPlace;
@@ -23,7 +24,7 @@ use jsi::{
 use libsignal_core::{Aci, DeviceId, Pni, ProtocolAddress};
 use libsignal_protocol::kem::{Key as KemKey, KeyPair as KyberKeyPair, KeyType, Public};
 use libsignal_protocol::{
-    extract_decryption_error_message_from_serialized_content, CiphertextMessageType,
+    extract_decryption_error_message_from_serialized_content, group_decrypt, CiphertextMessageType,
     DecryptionErrorMessage, PrivateKey as CurvePrivateKey, PublicKey as CurvePublicKey,
     SenderCertificate, SenderKeyStore, ServerCertificate, Timestamp,
 };
@@ -235,7 +236,7 @@ impl LibsignalAPI {
     ) -> anyhow::Result<i64> {
         let address: &ProtocolAddress = get_reference(pointer, rt)?;
 
-        Ok(address.device_id().into())
+        Ok(u32::from(address.device_id()) as i64)
     }
 
     #[host_object(method as SenderCertificate_New)]
@@ -1493,17 +1494,32 @@ impl LibsignalAPI {
     #[host_object(method as GroupCipher_DecryptMessage)]
     pub fn GroupCipher_DecryptMessage<'rt>(
         &self,
-        rt: &mut RuntimeHandle<'rt>,
-        sender: JsiValue<'rt>,
-        message: JsiValue<'rt>,
-        store: JsiValue<'rt>,
+        rt: &mut RuntimeHandle<'static>,
+        sender: JsiValue<'static>,
+        message: JsiValue<'static>,
+        store: JsiValue<'static>,
     ) -> anyhow::Result<JsiValue<'rt>> {
-        fn my_callback<'a>(
-        ) -> Pin<Box<dyn Future<Output = anyhow::Result<JsiValue<'a>>> + Send + 'a>> {
-            // std::thread::sleep(std::time::Duration::from_secs(2));
-            Box::pin(async { Ok(JsiValue::new_number(64.0)) })
-        }
-        let callback: CallbackType<'static> = Arc::new(my_callback);
+        let rt_ptr = Box::into_raw(Box::new(clone_runtime_handle(rt))) as i64;
+        let sender_ptr = Box::into_raw(Box::new(sender)) as i64;
+        let message_ptr = Box::into_raw(Box::new(message)) as i64;
+        let store_ptr = Box::into_raw(Box::new(store)) as i64;
+
+        let callback: CallbackType<'static> = Arc::new(move || {
+            Box::pin(async move {
+                let mut rt = *unsafe { Box::from_raw(rt_ptr as *mut RuntimeHandle<'static>) };
+                let sender = *unsafe { Box::from_raw(sender_ptr as *mut JsiValue<'static>) };
+                let message = *unsafe { Box::from_raw(message_ptr as *mut JsiValue<'static>) };
+                let store = *unsafe { Box::from_raw(store_ptr as *mut JsiValue<'static>) };
+                let message_bytes = get_buffer(message, &mut rt)?;
+                let protocol_address: &ProtocolAddress = get_reference(sender, &mut rt)?;
+
+                let mut store = JSISenderKeyStore::new(store, clone_runtime_handle(&mut rt))?;
+
+                let result = group_decrypt(&message_bytes, &mut store, protocol_address).await;
+
+                Ok(JsiValue::new_number(64.0))
+            })
+        });
 
         make_async(rt, callback, self.callInvoker.clone())
     }
