@@ -55,7 +55,7 @@ pub async fn decrypt(
         &mut store.session_store,
         &mut store.identity_store,
         &mut store.pre_key_store,
-        &store.signed_pre_key_store,
+        &mut store.signed_pre_key_store,
         &mut store.kyber_pre_key_store,
         &mut csprng,
     )
@@ -351,14 +351,14 @@ impl TestStoreBuilder {
             .expect("able toe store kyber pre key");
     }
 
-    pub fn make_bundle_with_latest_keys(&self, device_id: DeviceId) -> PreKeyBundle {
+    pub fn make_bundle_with_latest_keys(&mut self, device_id: DeviceId) -> PreKeyBundle {
         let registration_id = self
             .store
             .get_local_registration_id()
             .now_or_never()
             .expect("sync")
             .expect("contains local registration id");
-        let maybe_pre_key_record = self.store.all_pre_key_ids().max().map(|id| {
+        let maybe_pre_key_record = self.store.clone().all_pre_key_ids().max().map(|id| {
             self.store
                 .pre_key_store
                 .get_pre_key(*id)
@@ -375,6 +375,7 @@ impl TestStoreBuilder {
         let identity_key = identity_key_pair.identity_key();
         let signed_pre_key_record = self
             .store
+            .clone()
             .all_signed_pre_key_ids()
             .max()
             .map(|id| {
@@ -385,13 +386,14 @@ impl TestStoreBuilder {
                     .expect("has signed pre key")
             })
             .expect("contains at least one signed pre key");
-        let maybe_kyber_pre_key_record = self.store.all_kyber_pre_key_ids().max().map(|id| {
-            self.store
-                .get_kyber_pre_key(*id)
-                .now_or_never()
-                .expect("sync")
-                .expect("has kyber pre key")
-        });
+        let maybe_kyber_pre_key_record =
+            self.store.clone().all_kyber_pre_key_ids().max().map(|id| {
+                self.store
+                    .get_kyber_pre_key(*id)
+                    .now_or_never()
+                    .expect("sync")
+                    .expect("has kyber pre key")
+            });
         let mut bundle = PreKeyBundle::new(
             registration_id,
             device_id,
@@ -445,17 +447,17 @@ impl TestStoreBuilder {
 }
 
 pub trait HasSessionVersion {
-    fn session_version(&self, address: &ProtocolAddress) -> Result<u32, SignalProtocolError>;
+    fn session_version(&mut self, address: &ProtocolAddress) -> Result<u32, SignalProtocolError>;
 }
 
 impl HasSessionVersion for TestStoreBuilder {
-    fn session_version(&self, address: &ProtocolAddress) -> Result<u32, SignalProtocolError> {
+    fn session_version(&mut self, address: &ProtocolAddress) -> Result<u32, SignalProtocolError> {
         self.store.session_version(address)
     }
 }
 
 impl HasSessionVersion for InMemSignalProtocolStore {
-    fn session_version(&self, address: &ProtocolAddress) -> Result<u32, SignalProtocolError> {
+    fn session_version(&mut self, address: &ProtocolAddress) -> Result<u32, SignalProtocolError> {
         self.load_session(address)
             .now_or_never()
             .expect("sync")?

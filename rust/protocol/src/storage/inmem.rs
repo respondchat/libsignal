@@ -48,11 +48,11 @@ impl InMemIdentityKeyStore {
 
 #[async_trait(?Send)]
 impl traits::IdentityKeyStore for InMemIdentityKeyStore {
-    async fn get_identity_key_pair(&self) -> Result<IdentityKeyPair> {
+    async fn get_identity_key_pair(&mut self) -> Result<IdentityKeyPair> {
         Ok(self.key_pair)
     }
 
-    async fn get_local_registration_id(&self) -> Result<u32> {
+    async fn get_local_registration_id(&mut self) -> Result<u32> {
         Ok(self.registration_id)
     }
 
@@ -77,7 +77,7 @@ impl traits::IdentityKeyStore for InMemIdentityKeyStore {
     }
 
     async fn is_trusted_identity(
-        &self,
+        &mut self,
         address: &ProtocolAddress,
         identity: &IdentityKey,
         _direction: traits::Direction,
@@ -90,7 +90,7 @@ impl traits::IdentityKeyStore for InMemIdentityKeyStore {
         }
     }
 
-    async fn get_identity(&self, address: &ProtocolAddress) -> Result<Option<IdentityKey>> {
+    async fn get_identity(&mut self, address: &ProtocolAddress) -> Result<Option<IdentityKey>> {
         match self.known_keys.get(address) {
             None => Ok(None),
             Some(k) => Ok(Some(k.to_owned())),
@@ -126,7 +126,7 @@ impl Default for InMemPreKeyStore {
 
 #[async_trait(?Send)]
 impl traits::PreKeyStore for InMemPreKeyStore {
-    async fn get_pre_key(&self, id: PreKeyId) -> Result<PreKeyRecord> {
+    async fn get_pre_key(&mut self, id: PreKeyId) -> Result<PreKeyRecord> {
         Ok(self
             .pre_keys
             .get(&id)
@@ -175,7 +175,7 @@ impl Default for InMemSignedPreKeyStore {
 
 #[async_trait(?Send)]
 impl traits::SignedPreKeyStore for InMemSignedPreKeyStore {
-    async fn get_signed_pre_key(&self, id: SignedPreKeyId) -> Result<SignedPreKeyRecord> {
+    async fn get_signed_pre_key(&mut self, id: SignedPreKeyId) -> Result<SignedPreKeyRecord> {
         Ok(self
             .signed_pre_keys
             .get(&id)
@@ -222,7 +222,10 @@ impl Default for InMemKyberPreKeyStore {
 
 #[async_trait(?Send)]
 impl traits::KyberPreKeyStore for InMemKyberPreKeyStore {
-    async fn get_kyber_pre_key(&self, kyber_prekey_id: KyberPreKeyId) -> Result<KyberPreKeyRecord> {
+    async fn get_kyber_pre_key(
+        &mut self,
+        kyber_prekey_id: KyberPreKeyId,
+    ) -> Result<KyberPreKeyRecord> {
         Ok(self
             .kyber_pre_keys
             .get(&kyber_prekey_id)
@@ -287,7 +290,7 @@ impl Default for InMemSessionStore {
 
 #[async_trait(?Send)]
 impl traits::SessionStore for InMemSessionStore {
-    async fn load_session(&self, address: &ProtocolAddress) -> Result<Option<SessionRecord>> {
+    async fn load_session(&mut self, address: &ProtocolAddress) -> Result<Option<SessionRecord>> {
         match self.sessions.get(address) {
             None => Ok(None),
             Some(s) => Ok(Some(s.clone())),
@@ -398,11 +401,11 @@ impl InMemSignalProtocolStore {
 
 #[async_trait(?Send)]
 impl traits::IdentityKeyStore for InMemSignalProtocolStore {
-    async fn get_identity_key_pair(&self) -> Result<IdentityKeyPair> {
+    async fn get_identity_key_pair(&mut self) -> Result<IdentityKeyPair> {
         self.identity_store.get_identity_key_pair().await
     }
 
-    async fn get_local_registration_id(&self) -> Result<u32> {
+    async fn get_local_registration_id(&mut self) -> Result<u32> {
         self.identity_store.get_local_registration_id().await
     }
 
@@ -415,7 +418,7 @@ impl traits::IdentityKeyStore for InMemSignalProtocolStore {
     }
 
     async fn is_trusted_identity(
-        &self,
+        &mut self,
         address: &ProtocolAddress,
         identity: &IdentityKey,
         direction: traits::Direction,
@@ -425,14 +428,14 @@ impl traits::IdentityKeyStore for InMemSignalProtocolStore {
             .await
     }
 
-    async fn get_identity(&self, address: &ProtocolAddress) -> Result<Option<IdentityKey>> {
+    async fn get_identity(&mut self, address: &ProtocolAddress) -> Result<Option<IdentityKey>> {
         self.identity_store.get_identity(address).await
     }
 }
 
 #[async_trait(?Send)]
 impl traits::PreKeyStore for InMemSignalProtocolStore {
-    async fn get_pre_key(&self, id: PreKeyId) -> Result<PreKeyRecord> {
+    async fn get_pre_key(&mut self, id: PreKeyId) -> Result<PreKeyRecord> {
         self.pre_key_store.get_pre_key(id).await
     }
 
@@ -447,7 +450,7 @@ impl traits::PreKeyStore for InMemSignalProtocolStore {
 
 #[async_trait(?Send)]
 impl traits::SignedPreKeyStore for InMemSignalProtocolStore {
-    async fn get_signed_pre_key(&self, id: SignedPreKeyId) -> Result<SignedPreKeyRecord> {
+    async fn get_signed_pre_key(&mut self, id: SignedPreKeyId) -> Result<SignedPreKeyRecord> {
         self.signed_pre_key_store.get_signed_pre_key(id).await
     }
 
@@ -464,7 +467,10 @@ impl traits::SignedPreKeyStore for InMemSignalProtocolStore {
 
 #[async_trait(?Send)]
 impl traits::KyberPreKeyStore for InMemSignalProtocolStore {
-    async fn get_kyber_pre_key(&self, kyber_prekey_id: KyberPreKeyId) -> Result<KyberPreKeyRecord> {
+    async fn get_kyber_pre_key(
+        &mut self,
+        kyber_prekey_id: KyberPreKeyId,
+    ) -> Result<KyberPreKeyRecord> {
         self.kyber_pre_key_store
             .get_kyber_pre_key(kyber_prekey_id)
             .await
@@ -489,7 +495,7 @@ impl traits::KyberPreKeyStore for InMemSignalProtocolStore {
 
 #[async_trait(?Send)]
 impl traits::SessionStore for InMemSignalProtocolStore {
-    async fn load_session(&self, address: &ProtocolAddress) -> Result<Option<SessionRecord>> {
+    async fn load_session(&mut self, address: &ProtocolAddress) -> Result<Option<SessionRecord>> {
         self.session_store.load_session(address).await
     }
 

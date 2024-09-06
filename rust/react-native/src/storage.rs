@@ -1,116 +1,28 @@
 use async_trait::async_trait;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Waker};
 
+use crate::{get_bool, get_number, get_reference, serialize_bytes};
 use jsi::de::JsiDeserializeError;
-use jsi::{AsValue, FromObject, FromValue, JsiFn, JsiObject, JsiValue, PropName};
+use jsi::{FromObject, FromValue, JsiFn, JsiObject, JsiValue, PropName};
 use libsignal_core::ProtocolAddress;
-use libsignal_protocol::{SenderKeyRecord, SenderKeyStore, SignalProtocolError};
+use libsignal_protocol::{
+    Direction, GenericSignedPreKey, IdentityKey, IdentityKeyPair, IdentityKeyStore, KyberPreKeyId,
+    KyberPreKeyRecord, KyberPreKeyStore, PreKeyBundle, PreKeyId, PreKeyRecord, PreKeyStore,
+    SenderKeyRecord, SenderKeyStore, SessionRecord, SessionStore, SignalProtocolError,
+    SignedPreKeyId, SignedPreKeyRecord, SignedPreKeyStore,
+};
 use serde::de::Error;
 use uuid::Uuid;
 
-use crate::{get_number, get_reference, serialize_bytes};
-
-pub async fn await_promise(
-    rt: &mut jsi::RuntimeHandle<'static>,
-    result: JsiValue<'static>,
-) -> Result<JsiValue<'static>, String> {
-    let future = CallbackFuture::<JsiValue>::new();
-    let future_resolver = future.clone();
-
-    let promise = JsiObject::from_value(&result, rt).ok_or("Expected an object")?;
-    let then = JsiObject::from_value(&promise.get(PropName::new("then", rt), rt), rt)
-        .ok_or("Expected a then promise")?;
-    let then = JsiFn::from_object(&then, rt).ok_or("Expected a function")?;
-
-    let callback = JsiFn::from_host_fn(
-        &PropName::new("_", rt),
-        2,
-        Box::new(move |_this, mut args, rt| {
-            if args.len() != 1 {
-                return Err(anyhow::Error::msg("Expected an result").into());
-            }
-
-            future_resolver.resolve(args.remove(0));
-
-            Ok(JsiValue::new_undefined())
-        }),
-        rt,
-    )
-    .as_value(rt);
-
-    then.call([callback], rt).map_err(|e| e.to_string())?;
-
-    let result = future.await;
-
-    Ok(result)
+pub struct JSISenderKeyStore<'rt> {
+    get_sender_key: JsiFn<'rt>,
+    save_sender_key: JsiFn<'rt>,
+    rt: jsi::RuntimeHandle<'rt>,
 }
 
-struct CallbackFuture<T> {
-    result: Arc<Mutex<Option<T>>>,
-    waker: Arc<Mutex<Option<Waker>>>,
-    completed: AtomicBool,
-}
-
-impl<T> Clone for CallbackFuture<T> {
-    fn clone(&self) -> Self {
-        CallbackFuture {
-            result: Arc::clone(&self.result),
-            waker: Arc::clone(&self.waker),
-            completed: AtomicBool::new(false),
-        }
-    }
-}
-
-impl<T> CallbackFuture<T> {
-    fn new() -> Self {
-        CallbackFuture {
-            result: Arc::new(Mutex::new(None)),
-            waker: Arc::new(Mutex::new(None)),
-            completed: AtomicBool::new(false),
-        }
-    }
-
-    // Function to resolve the future with a value
-    fn resolve(&self, value: T) {
-        let mut result = self.result.lock().unwrap();
-        *result = Some(value);
-        self.completed.store(true, Ordering::SeqCst);
-
-        if let Some(waker) = self.waker.lock().unwrap().take() {
-            waker.wake();
-        }
-    }
-}
-
-impl<T> Future for CallbackFuture<T> {
-    type Output = T;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.completed.load(Ordering::SeqCst) {
-            let mut result = self.result.lock().unwrap();
-            Poll::Ready(result.take().unwrap())
-        } else {
-            *self.waker.lock().unwrap() = Some(cx.waker().clone());
-            Poll::Pending
-        }
-    }
-}
-
-pub struct JSISenderKeyStore {
-    store_object: JsiObject<'static>,
-    get_sender_key: JsiFn<'static>,
-    save_sender_key: JsiFn<'static>,
-    rt: jsi::RuntimeHandle<'static>,
-}
-
-impl JSISenderKeyStore {
+impl<'rt> JSISenderKeyStore<'rt> {
     pub fn new(
-        store_object: JsiValue<'static>,
-        mut rt: jsi::RuntimeHandle<'static>,
+        store_object: JsiValue<'rt>,
+        mut rt: jsi::RuntimeHandle<'rt>,
     ) -> Result<Self, JsiDeserializeError> {
         let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
             .ok_or(JsiDeserializeError::custom("Expected an object"))?;
@@ -130,7 +42,6 @@ impl JSISenderKeyStore {
             .ok_or(JsiDeserializeError::custom("Expected a function"))?;
 
         Ok(Self {
-            store_object,
             get_sender_key: getSenderKey,
             save_sender_key: saveSenderKey,
             rt,
@@ -148,16 +59,10 @@ impl JSISenderKeyStore {
             serialize_bytes(rt, distribution_id.as_bytes()).map_err(|e| e.to_string())?;
         let nativeAddress = JsiValue::new_number(Box::into_raw(Box::new(sender)) as i64 as f64);
 
-        let promise = self
+        let result = self
             .get_sender_key
             .call([nativeAddress, distribution_id], rt)
             .map_err(|e| e.to_string())?;
-
-        if promise.is_null() || !promise.is_object() {
-            return Ok(None);
-        }
-
-        let result = await_promise(rt, promise).await?;
 
         if !result.is_number() {
             return Ok(None);
@@ -182,19 +87,16 @@ impl JSISenderKeyStore {
         let record = record.serialize().map_err(|e| e.to_string())?;
         let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
 
-        let promise = self
-            .save_sender_key
+        self.save_sender_key
             .call([nativeAddress, distribution_id, record], rt)
             .map_err(|e| e.to_string())?;
-
-        await_promise(rt, promise).await?;
 
         Ok(())
     }
 }
 
 #[async_trait(?Send)]
-impl SenderKeyStore for JSISenderKeyStore {
+impl<'rt> SenderKeyStore for JSISenderKeyStore<'rt> {
     async fn load_sender_key(
         &mut self,
         sender: &ProtocolAddress,
@@ -202,7 +104,7 @@ impl SenderKeyStore for JSISenderKeyStore {
     ) -> Result<Option<SenderKeyRecord>, SignalProtocolError> {
         self.do_get_sender_key(sender.clone(), distribution_id)
             .await
-            .map_err(|s| SignalProtocolError::SessionNotFound(sender.clone()))
+            .map_err(|_| SignalProtocolError::SessionNotFound(sender.clone()))
     }
 
     async fn store_sender_key(
@@ -213,9 +115,630 @@ impl SenderKeyStore for JSISenderKeyStore {
     ) -> Result<(), SignalProtocolError> {
         self.do_save_sender_key(sender.clone(), distribution_id, record.clone())
             .await
-            .map_err(|s| SignalProtocolError::SessionNotFound(sender.clone()))
+            .map_err(|_| SignalProtocolError::SessionNotFound(sender.clone()))
     }
 }
 
-unsafe impl Send for JSISenderKeyStore {}
-unsafe impl Sync for JSISenderKeyStore {}
+pub struct JSISessionStore<'rt> {
+    get_session: JsiFn<'rt>,
+    save_session: JsiFn<'rt>,
+    rt: jsi::RuntimeHandle<'rt>,
+}
+
+impl<'rt> JSISessionStore<'rt> {
+    pub fn new(
+        store_object: JsiValue<'rt>,
+        mut rt: jsi::RuntimeHandle<'rt>,
+    ) -> Result<Self, JsiDeserializeError> {
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+
+        let getSession: JsiValue = store_object.get(PropName::new("_getSession", &mut rt), &mut rt);
+        let getSession: JsiObject = JsiObject::from_value(&getSession, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let getSession: JsiFn = JsiFn::from_object(&getSession, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let saveSession: JsiValue =
+            store_object.get(PropName::new("_saveSession", &mut rt), &mut rt);
+        let saveSession: JsiObject = JsiObject::from_value(&saveSession, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let saveSession: JsiFn = JsiFn::from_object(&saveSession, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        Ok(Self {
+            get_session: getSession,
+            save_session: saveSession,
+            rt,
+        })
+    }
+
+    async fn do_get_session(
+        &mut self,
+        address: ProtocolAddress,
+    ) -> Result<Option<SessionRecord>, String> {
+        let rt = &mut self.rt;
+
+        let nativeAddress = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
+
+        let result = self
+            .get_session
+            .call([nativeAddress], rt)
+            .map_err(|e| e.to_string())?;
+
+        if !result.is_object() {
+            return Ok(None);
+        }
+
+        let record: &SessionRecord = get_reference(result, rt).map_err(|e| e.to_string())?;
+
+        Ok(Some(record.clone()))
+    }
+
+    async fn do_save_session(
+        &mut self,
+        address: ProtocolAddress,
+        record: SessionRecord,
+    ) -> Result<(), String> {
+        let rt = &mut self.rt;
+
+        let nativeAddress = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
+        let record = record.serialize().map_err(|e| e.to_string())?;
+        let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
+
+        self.save_session
+            .call([nativeAddress, record], rt)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl<'rt> SessionStore for JSISessionStore<'rt> {
+    async fn load_session(
+        &mut self,
+        address: &ProtocolAddress,
+    ) -> Result<Option<SessionRecord>, SignalProtocolError> {
+        self.do_get_session(address.clone())
+            .await
+            .map_err(|_| SignalProtocolError::SessionNotFound(address.clone()))
+    }
+
+    async fn store_session(
+        &mut self,
+        address: &ProtocolAddress,
+        record: &SessionRecord,
+    ) -> Result<(), SignalProtocolError> {
+        self.do_save_session(address.clone(), record.clone())
+            .await
+            .map_err(|_| SignalProtocolError::SessionNotFound(address.clone()))
+    }
+}
+
+pub struct JSIKyberPreKeyStore<'rt> {
+    get_kyber_pre_key: JsiFn<'rt>,
+    save_kyber_pre_key: JsiFn<'rt>,
+    mark_kyber_pre_key_used: JsiFn<'rt>,
+    rt: jsi::RuntimeHandle<'rt>,
+}
+
+impl<'rt> JSIKyberPreKeyStore<'rt> {
+    pub fn new(
+        store_object: JsiValue<'rt>,
+        mut rt: jsi::RuntimeHandle<'rt>,
+    ) -> Result<Self, JsiDeserializeError> {
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+
+        let getKyberPreKey: JsiValue =
+            store_object.get(PropName::new("_getKyberPreKey", &mut rt), &mut rt);
+        let getKyberPreKey: JsiObject = JsiObject::from_value(&getKyberPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let getKyberPreKey: JsiFn = JsiFn::from_object(&getKyberPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let saveKyberPreKey: JsiValue =
+            store_object.get(PropName::new("_saveKyberPreKey", &mut rt), &mut rt);
+        let saveKyberPreKey: JsiObject = JsiObject::from_value(&saveKyberPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let saveKyberPreKey: JsiFn = JsiFn::from_object(&saveKyberPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let markKyberPreKeyUsed: JsiValue =
+            store_object.get(PropName::new("_markKyberPreKeyUsed", &mut rt), &mut rt);
+        let markKyberPreKeyUsed: JsiObject =
+            JsiObject::from_value(&markKyberPreKeyUsed, &mut rt)
+                .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let markKyberPreKeyUsed: JsiFn = JsiFn::from_object(&markKyberPreKeyUsed, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        Ok(Self {
+            get_kyber_pre_key: getKyberPreKey,
+            save_kyber_pre_key: saveKyberPreKey,
+            mark_kyber_pre_key_used: markKyberPreKeyUsed,
+            rt,
+        })
+    }
+
+    async fn do_get_kyber_pre_key(
+        &mut self,
+        kyber_prekey_id: KyberPreKeyId,
+    ) -> Result<KyberPreKeyRecord, String> {
+        let rt = &mut self.rt;
+        let key_id_value = JsiValue::new_number(u32::from(kyber_prekey_id) as f64);
+
+        let result = self
+            .get_kyber_pre_key
+            .call([key_id_value], rt)
+            .map_err(|e| e.to_string())?;
+
+        let record: &KyberPreKeyRecord = get_reference(result, rt).map_err(|e| e.to_string())?;
+
+        Ok(record.clone())
+    }
+
+    async fn do_save_kyber_pre_key(
+        &mut self,
+        kyber_prekey_id: KyberPreKeyId,
+        record: KyberPreKeyRecord,
+    ) -> Result<(), String> {
+        let rt = &mut self.rt;
+        let key_id_value = JsiValue::new_number(u32::from(kyber_prekey_id) as f64);
+        let record = record.serialize().map_err(|e| e.to_string())?;
+        let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
+
+        self.save_kyber_pre_key
+            .call([key_id_value, record], rt)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    async fn do_mark_kyber_pre_key_used(
+        &mut self,
+        kyber_prekey_id: KyberPreKeyId,
+    ) -> Result<(), String> {
+        let rt = &mut self.rt;
+        let key_id_value = JsiValue::new_number(u32::from(kyber_prekey_id) as f64);
+
+        self.mark_kyber_pre_key_used
+            .call([key_id_value], rt)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl<'rt> KyberPreKeyStore for JSIKyberPreKeyStore<'rt> {
+    async fn get_kyber_pre_key(
+        &mut self,
+        kyber_prekey_id: KyberPreKeyId,
+    ) -> Result<KyberPreKeyRecord, SignalProtocolError> {
+        self.do_get_kyber_pre_key(kyber_prekey_id)
+            .await
+            .map_err(|_| SignalProtocolError::InvalidKyberPreKeyId)
+    }
+
+    async fn save_kyber_pre_key(
+        &mut self,
+        kyber_prekey_id: KyberPreKeyId,
+        record: &KyberPreKeyRecord,
+    ) -> Result<(), SignalProtocolError> {
+        self.do_save_kyber_pre_key(kyber_prekey_id, record.clone())
+            .await
+            .map_err(|_| SignalProtocolError::InvalidKyberPreKeyId)
+    }
+
+    async fn mark_kyber_pre_key_used(
+        &mut self,
+        kyber_prekey_id: KyberPreKeyId,
+    ) -> Result<(), SignalProtocolError> {
+        self.do_mark_kyber_pre_key_used(kyber_prekey_id)
+            .await
+            .map_err(|_| SignalProtocolError::InvalidKyberPreKeyId)
+    }
+}
+
+pub struct JSISignedPreKeyStore<'rt> {
+    get_signed_pre_key: JsiFn<'rt>,
+    save_signed_pre_key: JsiFn<'rt>,
+    rt: jsi::RuntimeHandle<'rt>,
+}
+
+impl<'rt> JSISignedPreKeyStore<'rt> {
+    pub fn new(
+        store_object: JsiValue<'rt>,
+        mut rt: jsi::RuntimeHandle<'rt>,
+    ) -> Result<Self, JsiDeserializeError> {
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+
+        let getSignedPreKey: JsiValue =
+            store_object.get(PropName::new("_getSignedPreKey", &mut rt), &mut rt);
+        let getSignedPreKey: JsiObject = JsiObject::from_value(&getSignedPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let getSignedPreKey: JsiFn = JsiFn::from_object(&getSignedPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let saveSignedPreKey: JsiValue =
+            store_object.get(PropName::new("_saveSignedPreKey", &mut rt), &mut rt);
+        let saveSignedPreKey: JsiObject = JsiObject::from_value(&saveSignedPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let saveSignedPreKey: JsiFn = JsiFn::from_object(&saveSignedPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        Ok(Self {
+            get_signed_pre_key: getSignedPreKey,
+            save_signed_pre_key: saveSignedPreKey,
+            rt,
+        })
+    }
+
+    async fn do_get_signed_pre_key(
+        &mut self,
+        signed_prekey_id: SignedPreKeyId,
+    ) -> Result<SignedPreKeyRecord, String> {
+        let rt = &mut self.rt;
+        let key_id_value = JsiValue::new_number(u32::from(signed_prekey_id) as f64);
+
+        let result = self
+            .get_signed_pre_key
+            .call([key_id_value], rt)
+            .map_err(|e| e.to_string())?;
+
+        let record: &SignedPreKeyRecord = get_reference(result, rt).map_err(|e| e.to_string())?;
+
+        Ok(record.clone())
+    }
+
+    async fn do_save_signed_pre_key(
+        &mut self,
+        signed_prekey_id: SignedPreKeyId,
+        record: SignedPreKeyRecord,
+    ) -> Result<(), String> {
+        let rt = &mut self.rt;
+        let key_id_value = JsiValue::new_number(u32::from(signed_prekey_id) as f64);
+        let record = record.serialize().map_err(|e| e.to_string())?;
+        let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
+
+        self.save_signed_pre_key
+            .call([key_id_value, record], rt)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl<'rt> SignedPreKeyStore for JSISignedPreKeyStore<'rt> {
+    async fn get_signed_pre_key(
+        &mut self,
+        signed_prekey_id: SignedPreKeyId,
+    ) -> Result<SignedPreKeyRecord, SignalProtocolError> {
+        self.do_get_signed_pre_key(signed_prekey_id)
+            .await
+            .map_err(|_| SignalProtocolError::InvalidSignedPreKeyId)
+    }
+
+    async fn save_signed_pre_key(
+        &mut self,
+        signed_prekey_id: SignedPreKeyId,
+        record: &SignedPreKeyRecord,
+    ) -> Result<(), SignalProtocolError> {
+        self.do_save_signed_pre_key(signed_prekey_id, record.clone())
+            .await
+            .map_err(|_| SignalProtocolError::InvalidSignedPreKeyId)
+    }
+}
+
+pub struct JSIPreKeyStore<'rt> {
+    get_pre_key: JsiFn<'rt>,
+    save_pre_key: JsiFn<'rt>,
+    remove_pre_key: JsiFn<'rt>,
+    rt: jsi::RuntimeHandle<'rt>,
+}
+
+impl<'rt> JSIPreKeyStore<'rt> {
+    pub fn new(
+        store_object: JsiValue<'rt>,
+        mut rt: jsi::RuntimeHandle<'rt>,
+    ) -> Result<Self, JsiDeserializeError> {
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+
+        let getPreKey: JsiValue = store_object.get(PropName::new("_getPreKey", &mut rt), &mut rt);
+        let getPreKey: JsiObject = JsiObject::from_value(&getPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let getPreKey: JsiFn = JsiFn::from_object(&getPreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let savePreKey: JsiValue = store_object.get(PropName::new("_savePreKey", &mut rt), &mut rt);
+        let savePreKey: JsiObject = JsiObject::from_value(&savePreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let savePreKey: JsiFn = JsiFn::from_object(&savePreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let removePreKey: JsiValue =
+            store_object.get(PropName::new("_removePreKey", &mut rt), &mut rt);
+        let removePreKey: JsiObject = JsiObject::from_value(&removePreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let removePreKey: JsiFn = JsiFn::from_object(&removePreKey, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        Ok(Self {
+            get_pre_key: getPreKey,
+            save_pre_key: savePreKey,
+            remove_pre_key: removePreKey,
+            rt,
+        })
+    }
+
+    async fn do_get_pre_key(&mut self, prekey_id: PreKeyId) -> Result<PreKeyRecord, String> {
+        let rt = &mut self.rt;
+        let key_id_value = JsiValue::new_number(u32::from(prekey_id) as f64);
+
+        let result = self
+            .get_pre_key
+            .call([key_id_value], rt)
+            .map_err(|e| e.to_string())?;
+
+        let record: &PreKeyRecord = get_reference(result, rt).map_err(|e| e.to_string())?;
+
+        Ok(record.clone())
+    }
+
+    async fn do_save_pre_key(
+        &mut self,
+        prekey_id: PreKeyId,
+        record: PreKeyRecord,
+    ) -> Result<(), String> {
+        let rt = &mut self.rt;
+        let key_id_value = JsiValue::new_number(u32::from(prekey_id) as f64);
+        let record = record.serialize().map_err(|e| e.to_string())?;
+        let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
+
+        self.save_pre_key
+            .call([key_id_value, record], rt)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+
+    async fn do_remove_pre_key(&mut self, prekey_id: PreKeyId) -> Result<(), String> {
+        let rt = &mut self.rt;
+        let key_id_value = JsiValue::new_number(u32::from(prekey_id) as f64);
+
+        self.remove_pre_key
+            .call([key_id_value], rt)
+            .map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+}
+
+#[async_trait(?Send)]
+impl<'rt> PreKeyStore for JSIPreKeyStore<'rt> {
+    async fn get_pre_key(
+        &mut self,
+        prekey_id: PreKeyId,
+    ) -> Result<PreKeyRecord, SignalProtocolError> {
+        self.do_get_pre_key(prekey_id)
+            .await
+            .map_err(|_| SignalProtocolError::InvalidPreKeyId)
+    }
+
+    async fn save_pre_key(
+        &mut self,
+        prekey_id: PreKeyId,
+        record: &PreKeyRecord,
+    ) -> Result<(), SignalProtocolError> {
+        self.do_save_pre_key(prekey_id, record.clone())
+            .await
+            .map_err(|_| SignalProtocolError::InvalidPreKeyId)
+    }
+
+    async fn remove_pre_key(&mut self, prekey_id: PreKeyId) -> Result<(), SignalProtocolError> {
+        self.do_remove_pre_key(prekey_id)
+            .await
+            .map_err(|_| SignalProtocolError::InvalidPreKeyId)
+    }
+}
+
+pub struct JSIIdentityKeyStore<'rt> {
+    get_identity_key_pair: JsiFn<'rt>,
+    get_local_registration_id: JsiFn<'rt>,
+    save_identity: JsiFn<'rt>,
+    is_trusted_identity: JsiFn<'rt>,
+    get_identity: JsiFn<'rt>,
+    rt: jsi::RuntimeHandle<'rt>,
+}
+
+impl<'rt> JSIIdentityKeyStore<'rt> {
+    pub fn new(
+        store_object: JsiValue<'rt>,
+        mut rt: jsi::RuntimeHandle<'rt>,
+    ) -> Result<Self, JsiDeserializeError> {
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+
+        let get_identity_key_pair: JsiValue =
+            store_object.get(PropName::new("_getIdentityKeyPair", &mut rt), &mut rt);
+        let get_identity_key_pair: JsiObject =
+            JsiObject::from_value(&get_identity_key_pair, &mut rt)
+                .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let get_identity_key_pair: JsiFn = JsiFn::from_object(&get_identity_key_pair, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let get_local_registration_id: JsiValue =
+            store_object.get(PropName::new("_getLocalRegistrationId", &mut rt), &mut rt);
+        let get_local_registration_id: JsiObject =
+            JsiObject::from_value(&get_local_registration_id, &mut rt)
+                .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let get_local_registration_id: JsiFn =
+            JsiFn::from_object(&get_local_registration_id, &mut rt)
+                .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let save_identity: JsiValue =
+            store_object.get(PropName::new("_saveIdentity", &mut rt), &mut rt);
+        let save_identity: JsiObject = JsiObject::from_value(&save_identity, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let save_identity: JsiFn = JsiFn::from_object(&save_identity, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let is_trusted_identity: JsiValue =
+            store_object.get(PropName::new("_isTrustedIdentity", &mut rt), &mut rt);
+        let is_trusted_identity: JsiObject =
+            JsiObject::from_value(&is_trusted_identity, &mut rt)
+                .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let is_trusted_identity: JsiFn = JsiFn::from_object(&is_trusted_identity, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        let get_identity: JsiValue =
+            store_object.get(PropName::new("_getIdentity", &mut rt), &mut rt);
+        let get_identity: JsiObject = JsiObject::from_value(&get_identity, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let get_identity: JsiFn = JsiFn::from_object(&get_identity, &mut rt)
+            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+
+        Ok(Self {
+            get_identity_key_pair,
+            get_local_registration_id,
+            save_identity,
+            is_trusted_identity,
+            get_identity,
+            rt,
+        })
+    }
+
+    async fn do_get_identity_key_pair(&mut self) -> Result<IdentityKeyPair, String> {
+        let rt = &mut self.rt;
+        let result = self
+            .get_identity_key_pair
+            .call([], rt)
+            .map_err(|e| e.to_string())?;
+
+        let pair: &IdentityKeyPair = get_reference(result, rt).map_err(|e| e.to_string())?;
+        Ok(pair.clone())
+    }
+
+    async fn do_get_local_registration_id(&mut self) -> Result<u32, String> {
+        let rt = &mut self.rt;
+        let result = self
+            .get_local_registration_id
+            .call([], rt)
+            .map_err(|e| e.to_string())?;
+
+        let id = get_number(result, rt).map_err(|e| e.to_string())?;
+
+        Ok(id as u32)
+    }
+
+    async fn do_save_identity(
+        &mut self,
+        address: ProtocolAddress,
+        identity: IdentityKey,
+    ) -> Result<bool, String> {
+        let rt = &mut self.rt;
+        let native_address = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
+        let identity_value =
+            serialize_bytes(rt, &identity.serialize()).map_err(|e| e.to_string())?;
+
+        let result = self
+            .save_identity
+            .call([native_address, identity_value], rt)
+            .map_err(|e| e.to_string())?;
+
+        let result = get_bool(result, rt).map_err(|e| e.to_string())?;
+
+        Ok(result)
+    }
+
+    async fn do_is_trusted_identity(
+        &mut self,
+        address: ProtocolAddress,
+        identity: IdentityKey,
+        direction: Direction,
+    ) -> Result<bool, String> {
+        let rt = &mut self.rt;
+        let native_address = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
+        let identity_value =
+            serialize_bytes(rt, &identity.serialize()).map_err(|e| e.to_string())?;
+        let direction_value = JsiValue::new_number(direction as i32 as f64);
+
+        let result = self
+            .is_trusted_identity
+            .call([native_address, identity_value, direction_value], rt)
+            .map_err(|e| e.to_string())?;
+
+        let result = get_bool(result, rt).map_err(|e| e.to_string())?;
+
+        Ok(result)
+    }
+
+    async fn do_get_identity(
+        &mut self,
+        address: ProtocolAddress,
+    ) -> Result<Option<IdentityKey>, String> {
+        let rt = &mut self.rt;
+        let native_address = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
+
+        let result = self
+            .get_identity
+            .call([native_address], rt)
+            .map_err(|e| e.to_string())?;
+
+        if !result.is_object() {
+            return Ok(None);
+        }
+
+        let key: &IdentityKey = get_reference(result, rt).map_err(|e| e.to_string())?;
+        Ok(Some(key.clone()))
+    }
+}
+
+#[async_trait(?Send)]
+impl<'rt> IdentityKeyStore for JSIIdentityKeyStore<'rt> {
+    async fn get_identity_key_pair(&mut self) -> Result<IdentityKeyPair, SignalProtocolError> {
+        self.do_get_identity_key_pair()
+            .await
+            .map_err(|s| SignalProtocolError::InvalidArgument(s))
+    }
+
+    async fn get_local_registration_id(&mut self) -> Result<u32, SignalProtocolError> {
+        self.do_get_local_registration_id()
+            .await
+            .map_err(|s| SignalProtocolError::InvalidArgument(s))
+    }
+
+    async fn save_identity(
+        &mut self,
+        address: &ProtocolAddress,
+        identity: &IdentityKey,
+    ) -> Result<bool, SignalProtocolError> {
+        self.do_save_identity(address.clone(), identity.clone())
+            .await
+            .map_err(|s| SignalProtocolError::InvalidArgument(s))
+    }
+
+    async fn is_trusted_identity(
+        &mut self,
+        address: &ProtocolAddress,
+        identity: &IdentityKey,
+        direction: Direction,
+    ) -> Result<bool, SignalProtocolError> {
+        self.do_is_trusted_identity(address.clone(), identity.clone(), direction)
+            .await
+            .map_err(|s| SignalProtocolError::InvalidArgument(s))
+    }
+
+    async fn get_identity(
+        &mut self,
+        address: &ProtocolAddress,
+    ) -> Result<Option<IdentityKey>, SignalProtocolError> {
+        self.do_get_identity(address.clone())
+            .await
+            .map_err(|s| SignalProtocolError::InvalidArgument(s))
+    }
+}

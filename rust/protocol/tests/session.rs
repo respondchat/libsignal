@@ -371,7 +371,7 @@ fn test_bad_signed_pre_key_signature() -> TestResult {
         let bob_address = ProtocolAddress::new("+14151111112".to_owned(), 1.into());
 
         let mut alice_store = TestStoreBuilder::new().store;
-        let bob_store_builder = TestStoreBuilder::new()
+        let mut bob_store_builder = TestStoreBuilder::new()
             .with_pre_key(31337.into())
             .with_signed_pre_key(22.into());
 
@@ -1389,9 +1389,9 @@ fn test_simultaneous_initiate_repeated_messages() -> TestResult {
 
                 assert!(
                     !is_session_id_equal(
-                        &alice_store_builder.store,
+                        &mut alice_store_builder.store,
                         &alice_address,
-                        &bob_store_builder.store,
+                        &mut bob_store_builder.store,
                         &bob_address,
                     )
                     .await?
@@ -1434,9 +1434,9 @@ fn test_simultaneous_initiate_repeated_messages() -> TestResult {
 
                 assert!(
                     !is_session_id_equal(
-                        &alice_store_builder.store,
+                        &mut alice_store_builder.store,
                         &alice_address,
-                        &bob_store_builder.store,
+                        &mut bob_store_builder.store,
                         &bob_address,
                     )
                     .await?
@@ -1460,9 +1460,9 @@ fn test_simultaneous_initiate_repeated_messages() -> TestResult {
 
                 assert!(
                     !is_session_id_equal(
-                        &alice_store_builder.store,
+                        &mut alice_store_builder.store,
                         &alice_address,
-                        &bob_store_builder.store,
+                        &mut bob_store_builder.store,
                         &bob_address,
                     )
                     .await?
@@ -1505,9 +1505,9 @@ fn test_simultaneous_initiate_repeated_messages() -> TestResult {
 
                 assert!(
                     !is_session_id_equal(
-                        &alice_store_builder.store,
+                        &mut alice_store_builder.store,
                         &alice_address,
-                        &bob_store_builder.store,
+                        &mut bob_store_builder.store,
                         &bob_address,
                     )
                     .await?
@@ -1528,9 +1528,9 @@ fn test_simultaneous_initiate_repeated_messages() -> TestResult {
 
             assert!(
                 !is_session_id_equal(
-                    &alice_store_builder.store,
+                    &mut alice_store_builder.store,
                     &alice_address,
-                    &bob_store_builder.store,
+                    &mut bob_store_builder.store,
                     &bob_address,
                 )
                 .await?
@@ -1556,9 +1556,9 @@ fn test_simultaneous_initiate_repeated_messages() -> TestResult {
 
             assert!(
                 is_session_id_equal(
-                    &bob_store_builder.store,
+                    &mut bob_store_builder.store,
                     &bob_address,
-                    &alice_store_builder.store,
+                    &mut alice_store_builder.store,
                     &alice_address,
                 )
                 .await?
@@ -1670,9 +1670,9 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
                 assert!(
                     !is_session_id_equal(
-                        &alice_store_builder.store,
+                        &mut alice_store_builder.store,
                         &alice_address,
-                        &bob_store_builder.store,
+                        &mut bob_store_builder.store,
                         &bob_address,
                     )
                     .await?
@@ -1715,9 +1715,9 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
                 assert!(
                     !is_session_id_equal(
-                        &alice_store_builder.store,
+                        &mut alice_store_builder.store,
                         &alice_address,
-                        &bob_store_builder.store,
+                        &mut bob_store_builder.store,
                         &bob_address,
                     )
                     .await?
@@ -1741,9 +1741,9 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
                 assert!(
                     !is_session_id_equal(
-                        &alice_store_builder.store,
+                        &mut alice_store_builder.store,
                         &alice_address,
-                        &bob_store_builder.store,
+                        &mut bob_store_builder.store,
                         &bob_address,
                     )
                     .await?
@@ -1786,9 +1786,9 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
                 assert!(
                     !is_session_id_equal(
-                        &alice_store_builder.store,
+                        &mut alice_store_builder.store,
                         &alice_address,
-                        &bob_store_builder.store,
+                        &mut bob_store_builder.store,
                         &bob_address,
                     )
                     .await?
@@ -1809,9 +1809,9 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
             assert!(
                 !is_session_id_equal(
-                    &alice_store_builder.store,
+                    &mut alice_store_builder.store,
                     &alice_address,
-                    &bob_store_builder.store,
+                    &mut bob_store_builder.store,
                     &bob_address,
                 )
                 .await?
@@ -1837,9 +1837,9 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
             assert!(
                 is_session_id_equal(
-                    &bob_store_builder.store,
+                    &mut bob_store_builder.store,
                     &bob_address,
-                    &alice_store_builder.store,
+                    &mut alice_store_builder.store,
                     &alice_address,
                 )
                 .await?
@@ -1860,9 +1860,9 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
             assert!(
                 !is_session_id_equal(
-                    &bob_store_builder.store,
+                    &mut bob_store_builder.store,
                     &bob_address,
-                    &alice_store_builder.store,
+                    &mut alice_store_builder.store,
                     &alice_address,
                 )
                 .await?
@@ -1888,9 +1888,9 @@ fn test_simultaneous_initiate_lost_message_repeated_messages() -> TestResult {
 
             assert!(
                 is_session_id_equal(
-                    &bob_store_builder.store,
+                    &mut bob_store_builder.store,
                     &bob_address,
-                    &alice_store_builder.store,
+                    &mut alice_store_builder.store,
                     &alice_address,
                 )
                 .await?
@@ -1979,7 +1979,7 @@ fn test_unacknowledged_sessions_eventually_expire() -> TestResult {
         let bob_address = ProtocolAddress::new("+14151111112".to_owned(), 1.into());
 
         let mut alice_store = TestStoreBuilder::new().store;
-        let bob_store_builder = TestStoreBuilder::new()
+        let mut bob_store_builder = TestStoreBuilder::new()
             .with_pre_key(0.into())
             .with_signed_pre_key(0.into())
             .with_kyber_pre_key(0.into());
@@ -2246,9 +2246,9 @@ async fn run_interaction(
 }
 
 async fn is_session_id_equal(
-    alice_store: &dyn ProtocolStore,
+    alice_store: &mut dyn ProtocolStore,
     alice_address: &ProtocolAddress,
-    bob_store: &dyn ProtocolStore,
+    bob_store: &mut dyn ProtocolStore,
     bob_address: &ProtocolAddress,
 ) -> Result<bool, SignalProtocolError> {
     Ok(alice_store

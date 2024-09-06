@@ -263,7 +263,7 @@ fn group_sealed_sender() -> Result<(), SignalProtocolError> {
                 .load_existing_sessions(&recipients)?,
             [],
             &alice_usmc,
-            &alice_store.identity_store,
+            &mut alice_store.identity_store,
             &mut csprng,
         )
         .await?;
@@ -305,7 +305,8 @@ fn group_sealed_sender() -> Result<(), SignalProtocolError> {
             .as_ref()
             .concat();
 
-        let bob_usmc = sealed_sender_decrypt_to_usmc(&bob_ctext, &bob_store.identity_store).await?;
+        let bob_usmc =
+            sealed_sender_decrypt_to_usmc(&bob_ctext, &mut bob_store.identity_store).await?;
 
         assert_eq!(bob_usmc.sender()?.sender_uuid()?, alice_uuid);
         assert_eq!(bob_usmc.sender()?.sender_e164()?, Some(alice_e164.as_ref()));
@@ -322,7 +323,7 @@ fn group_sealed_sender() -> Result<(), SignalProtocolError> {
         );
 
         let carol_usmc =
-            sealed_sender_decrypt_to_usmc(&carol_ctext, &carol_store.identity_store).await?;
+            sealed_sender_decrypt_to_usmc(&carol_ctext, &mut carol_store.identity_store).await?;
 
         assert_eq!(carol_usmc.serialized()?, bob_usmc.serialized()?);
 
@@ -491,7 +492,7 @@ fn group_sealed_sender_multiple_devices() -> Result<(), SignalProtocolError> {
                 .load_existing_sessions(&recipients)?,
             [],
             &alice_usmc,
-            &alice_store.identity_store,
+            &mut alice_store.identity_store,
             &mut csprng,
         )
         .await?;
@@ -537,7 +538,8 @@ fn group_sealed_sender_multiple_devices() -> Result<(), SignalProtocolError> {
             .as_ref()
             .concat();
 
-        let bob_usmc = sealed_sender_decrypt_to_usmc(&bob_ctext, &bob_store.identity_store).await?;
+        let bob_usmc =
+            sealed_sender_decrypt_to_usmc(&bob_ctext, &mut bob_store.identity_store).await?;
 
         assert_eq!(bob_usmc.sender()?.sender_uuid()?, alice_uuid);
         assert_eq!(bob_usmc.sender()?.sender_e164()?, Some(alice_e164.as_ref()));
@@ -554,7 +556,7 @@ fn group_sealed_sender_multiple_devices() -> Result<(), SignalProtocolError> {
         );
 
         let carol_usmc =
-            sealed_sender_decrypt_to_usmc(&carol_ctext, &carol_store.identity_store).await?;
+            sealed_sender_decrypt_to_usmc(&carol_ctext, &mut carol_store.identity_store).await?;
 
         assert_eq!(carol_usmc.serialized()?, bob_usmc.serialized()?);
 
@@ -729,7 +731,7 @@ fn group_sealed_sender_multiple_devices_and_excluded_recipients() -> Result<(), 
                 ServiceId::parse_from_service_id_string(&erin_uuid).unwrap(),
             ],
             &alice_usmc,
-            &alice_store.identity_store,
+            &mut alice_store.identity_store,
             &mut csprng,
         )
         .await?;
@@ -804,7 +806,8 @@ fn group_sealed_sender_multiple_devices_and_excluded_recipients() -> Result<(), 
             .as_ref()
             .concat();
 
-        let bob_usmc = sealed_sender_decrypt_to_usmc(&bob_ctext, &bob_store.identity_store).await?;
+        let bob_usmc =
+            sealed_sender_decrypt_to_usmc(&bob_ctext, &mut bob_store.identity_store).await?;
 
         assert_eq!(bob_usmc.sender()?.sender_uuid()?, alice_uuid);
         assert_eq!(bob_usmc.sender()?.sender_e164()?, Some(alice_e164.as_ref()));
@@ -821,7 +824,7 @@ fn group_sealed_sender_multiple_devices_and_excluded_recipients() -> Result<(), 
         );
 
         let carol_usmc =
-            sealed_sender_decrypt_to_usmc(&carol_ctext, &carol_store.identity_store).await?;
+            sealed_sender_decrypt_to_usmc(&carol_ctext, &mut carol_store.identity_store).await?;
 
         assert_eq!(carol_usmc.serialized()?, bob_usmc.serialized()?);
 

@@ -157,7 +157,7 @@ pub async fn message_decrypt<R: Rng + CryptoRng>(
     session_store: &mut dyn SessionStore,
     identity_store: &mut dyn IdentityKeyStore,
     pre_key_store: &mut dyn PreKeyStore,
-    signed_pre_key_store: &dyn SignedPreKeyStore,
+    signed_pre_key_store: &mut dyn SignedPreKeyStore,
     kyber_pre_key_store: &mut dyn KyberPreKeyStore,
     csprng: &mut R,
 ) -> Result<Vec<u8>> {
@@ -192,7 +192,7 @@ pub async fn message_decrypt_prekey<R: Rng + CryptoRng>(
     session_store: &mut dyn SessionStore,
     identity_store: &mut dyn IdentityKeyStore,
     pre_key_store: &mut dyn PreKeyStore,
-    signed_pre_key_store: &dyn SignedPreKeyStore,
+    signed_pre_key_store: &mut dyn SignedPreKeyStore,
     kyber_pre_key_store: &mut dyn KyberPreKeyStore,
     csprng: &mut R,
 ) -> Result<Vec<u8>> {

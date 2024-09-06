@@ -860,7 +860,7 @@ pub async fn sealed_sender_encrypt<R: Rng + CryptoRng>(
 pub async fn sealed_sender_encrypt_from_usmc<R: Rng + CryptoRng>(
     destination: &ProtocolAddress,
     usmc: &UnidentifiedSenderMessageContent,
-    identity_store: &dyn IdentityKeyStore,
+    identity_store: &mut dyn IdentityKeyStore,
     rng: &mut R,
 ) -> Result<Vec<u8>> {
     let our_identity = identity_store.get_identity_key_pair().await?;
@@ -1248,7 +1248,7 @@ pub async fn sealed_sender_multi_recipient_encrypt<
     destination_sessions: &[&SessionRecord],
     excluded_recipients: X,
     usmc: &UnidentifiedSenderMessageContent,
-    identity_store: &dyn IdentityKeyStore,
+    identity_store: &mut dyn IdentityKeyStore,
     rng: &mut R,
 ) -> Result<Vec<u8>>
 where
@@ -1273,7 +1273,7 @@ async fn sealed_sender_multi_recipient_encrypt_impl<
     destination_sessions: &[&SessionRecord],
     excluded_recipients: X,
     usmc: &UnidentifiedSenderMessageContent,
-    identity_store: &dyn IdentityKeyStore,
+    identity_store: &mut dyn IdentityKeyStore,
     rng: &mut R,
 ) -> Result<Vec<u8>>
 where
@@ -1742,7 +1742,7 @@ impl<'a> SealedSenderV2SentMessage<'a> {
 /// before decrypting the underlying message.
 pub async fn sealed_sender_decrypt_to_usmc(
     ciphertext: &[u8],
-    identity_store: &dyn IdentityKeyStore,
+    identity_store: &mut dyn IdentityKeyStore,
 ) -> Result<UnidentifiedSenderMessageContent> {
     let our_identity = identity_store.get_identity_key_pair().await?;
 
@@ -1922,7 +1922,7 @@ pub async fn sealed_sender_decrypt(
     identity_store: &mut dyn IdentityKeyStore,
     session_store: &mut dyn SessionStore,
     pre_key_store: &mut dyn PreKeyStore,
-    signed_pre_key_store: &dyn SignedPreKeyStore,
+    signed_pre_key_store: &mut dyn SignedPreKeyStore,
     kyber_pre_key_store: &mut dyn KyberPreKeyStore,
 ) -> Result<SealedSenderDecryptionResult> {
     let usmc = sealed_sender_decrypt_to_usmc(ciphertext, identity_store).await?;

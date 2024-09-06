@@ -37,7 +37,7 @@ pub enum Direction {
 #[async_trait(?Send)]
 pub trait IdentityKeyStore {
     /// Return the single specific identity the store is assumed to represent, with private key.
-    async fn get_identity_key_pair(&self) -> Result<IdentityKeyPair>;
+    async fn get_identity_key_pair(&mut self) -> Result<IdentityKeyPair>;
 
     /// Return a [u32] specific to this store instance.
     ///
@@ -47,7 +47,7 @@ pub trait IdentityKeyStore {
     /// If the same *device* is unregistered, then registers again, the [ProtocolAddress::device_id]
     /// may be the same, but the store registration id returned by this method should
     /// be regenerated.
-    async fn get_local_registration_id(&self) -> Result<u32>;
+    async fn get_local_registration_id(&mut self) -> Result<u32>;
 
     // TODO: make this into an enum instead of a bool!
     /// Record an identity into the store. The identity is then considered "trusted".
@@ -62,21 +62,21 @@ pub trait IdentityKeyStore {
 
     /// Return whether an identity is trusted for the role specified by `direction`.
     async fn is_trusted_identity(
-        &self,
+        &mut self,
         address: &ProtocolAddress,
         identity: &IdentityKey,
         direction: Direction,
     ) -> Result<bool>;
 
     /// Return the public identity for the given `address`, if known.
-    async fn get_identity(&self, address: &ProtocolAddress) -> Result<Option<IdentityKey>>;
+    async fn get_identity(&mut self, address: &ProtocolAddress) -> Result<Option<IdentityKey>>;
 }
 
 /// Interface for storing pre-keys downloaded from a server.
 #[async_trait(?Send)]
 pub trait PreKeyStore {
     /// Look up the pre-key corresponding to `prekey_id`.
-    async fn get_pre_key(&self, prekey_id: PreKeyId) -> Result<PreKeyRecord>;
+    async fn get_pre_key(&mut self, prekey_id: PreKeyId) -> Result<PreKeyRecord>;
 
     /// Set the entry for `prekey_id` to the value of `record`.
     async fn save_pre_key(&mut self, prekey_id: PreKeyId, record: &PreKeyRecord) -> Result<()>;
@@ -90,7 +90,7 @@ pub trait PreKeyStore {
 pub trait SignedPreKeyStore {
     /// Look up the signed pre-key corresponding to `signed_prekey_id`.
     async fn get_signed_pre_key(
-        &self,
+        &mut self,
         signed_prekey_id: SignedPreKeyId,
     ) -> Result<SignedPreKeyRecord>;
 
@@ -108,7 +108,10 @@ pub trait SignedPreKeyStore {
 #[async_trait(?Send)]
 pub trait KyberPreKeyStore {
     /// Look up the signed kyber pre-key corresponding to `kyber_prekey_id`.
-    async fn get_kyber_pre_key(&self, kyber_prekey_id: KyberPreKeyId) -> Result<KyberPreKeyRecord>;
+    async fn get_kyber_pre_key(
+        &mut self,
+        kyber_prekey_id: KyberPreKeyId,
+    ) -> Result<KyberPreKeyRecord>;
 
     /// Set the entry for `kyber_prekey_id` to the value of `record`.
     async fn save_kyber_pre_key(
@@ -132,7 +135,7 @@ pub trait KyberPreKeyStore {
 #[async_trait(?Send)]
 pub trait SessionStore {
     /// Look up the session corresponding to `address`.
-    async fn load_session(&self, address: &ProtocolAddress) -> Result<Option<SessionRecord>>;
+    async fn load_session(&mut self, address: &ProtocolAddress) -> Result<Option<SessionRecord>>;
 
     /// Set the entry for `address` to the value of `record`.
     async fn store_session(

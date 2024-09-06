@@ -80,15 +80,20 @@ pub fn v1(c: &mut Criterion) {
     .expect("valid");
 
     let mut encrypt_it = || {
-        sealed_sender_encrypt_from_usmc(&bob_address, &usmc, &alice_store.identity_store, &mut rng)
-            .now_or_never()
-            .expect("sync")
-            .expect("valid")
+        sealed_sender_encrypt_from_usmc(
+            &bob_address,
+            &usmc,
+            &mut alice_store.identity_store,
+            &mut rng,
+        )
+        .now_or_never()
+        .expect("sync")
+        .expect("valid")
     };
     let encrypted = encrypt_it();
 
     let mut decrypt_it = || {
-        sealed_sender_decrypt_to_usmc(&encrypted, &bob_store.identity_store)
+        sealed_sender_decrypt_to_usmc(&encrypted, &mut bob_store.identity_store)
             .now_or_never()
             .expect("sync")
             .expect("valid")
@@ -172,7 +177,7 @@ pub fn v2(c: &mut Criterion) {
                 .expect("present"),
             [],
             &usmc,
-            &alice_store.identity_store,
+            &mut alice_store.identity_store,
             &mut rng,
         )
         .now_or_never()
@@ -186,7 +191,7 @@ pub fn v2(c: &mut Criterion) {
     assert_eq!(&incoming_recipient.service_id_string(), bob_address.name());
 
     let mut decrypt_it = || {
-        sealed_sender_decrypt_to_usmc(&incoming_message, &bob_store.identity_store)
+        sealed_sender_decrypt_to_usmc(&incoming_message, &mut bob_store.identity_store)
             .now_or_never()
             .expect("sync")
             .expect("valid")
@@ -239,7 +244,7 @@ pub fn v2(c: &mut Criterion) {
                             .expect("present"),
                         [],
                         &usmc,
-                        &alice_store.identity_store,
+                        &mut alice_store.identity_store,
                         &mut rng,
                     )
                     .now_or_never()
@@ -267,7 +272,7 @@ pub fn v2(c: &mut Criterion) {
                             .expect("present"),
                         [],
                         &usmc,
-                        &alice_store.identity_store,
+                        &mut alice_store.identity_store,
                         &mut rng,
                     )
                     .now_or_never()

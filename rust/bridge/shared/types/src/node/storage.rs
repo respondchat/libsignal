@@ -103,7 +103,10 @@ impl Finalize for NodePreKeyStore {
 
 #[async_trait(?Send)]
 impl PreKeyStore for NodePreKeyStore {
-    async fn get_pre_key(&self, pre_key_id: PreKeyId) -> Result<PreKeyRecord, SignalProtocolError> {
+    async fn get_pre_key(
+        &mut self,
+        pre_key_id: PreKeyId,
+    ) -> Result<PreKeyRecord, SignalProtocolError> {
         self.do_get_pre_key(pre_key_id.into())
             .await
             .map_err(|s| js_error_to_rust("getPreKey", s))
@@ -200,7 +203,7 @@ impl Finalize for NodeSignedPreKeyStore {
 #[async_trait(?Send)]
 impl SignedPreKeyStore for NodeSignedPreKeyStore {
     async fn get_signed_pre_key(
-        &self,
+        &mut self,
         signed_pre_key_id: SignedPreKeyId,
     ) -> Result<SignedPreKeyRecord, SignalProtocolError> {
         self.do_get_signed_pre_key(signed_pre_key_id.into())
@@ -316,7 +319,7 @@ impl Finalize for NodeKyberPreKeyStore {
 #[async_trait(?Send)]
 impl KyberPreKeyStore for NodeKyberPreKeyStore {
     async fn get_kyber_pre_key(
-        &self,
+        &mut self,
         kyber_pre_key_id: KyberPreKeyId,
     ) -> Result<KyberPreKeyRecord, SignalProtocolError> {
         self.do_get_kyber_pre_key(kyber_pre_key_id.into())
@@ -424,7 +427,7 @@ impl Finalize for NodeSessionStore {
 #[async_trait(?Send)]
 impl SessionStore for NodeSessionStore {
     async fn load_session(
-        &self,
+        &mut self,
         name: &ProtocolAddress,
     ) -> Result<Option<SessionRecord>, SignalProtocolError> {
         self.do_get_session(name.clone())
@@ -603,7 +606,7 @@ impl Finalize for NodeIdentityKeyStore {
 
 #[async_trait(?Send)]
 impl IdentityKeyStore for NodeIdentityKeyStore {
-    async fn get_identity_key_pair(&self) -> Result<IdentityKeyPair, SignalProtocolError> {
+    async fn get_identity_key_pair(&mut self) -> Result<IdentityKeyPair, SignalProtocolError> {
         let pk = self
             .do_get_identity_key()
             .await
@@ -612,14 +615,14 @@ impl IdentityKeyStore for NodeIdentityKeyStore {
         IdentityKeyPair::try_from(pk)
     }
 
-    async fn get_local_registration_id(&self) -> Result<u32, SignalProtocolError> {
+    async fn get_local_registration_id(&mut self) -> Result<u32, SignalProtocolError> {
         self.do_get_local_registration_id()
             .await
             .map_err(|s| js_error_to_rust("getLocalRegistrationId", s))
     }
 
     async fn get_identity(
-        &self,
+        &mut self,
         address: &ProtocolAddress,
     ) -> Result<Option<IdentityKey>, SignalProtocolError> {
         Ok(self
@@ -640,7 +643,7 @@ impl IdentityKeyStore for NodeIdentityKeyStore {
     }
 
     async fn is_trusted_identity(
-        &self,
+        &mut self,
         address: &ProtocolAddress,
         identity: &IdentityKey,
         direction: libsignal_protocol::Direction,

@@ -8,7 +8,7 @@ use jsi::{JsiValue, PropName, RuntimeHandle};
 
 // use crate::console_log;
 
-pub type CallbackType<'a> = Arc<
+pub type _CallbackType<'a> = Arc<
     dyn Fn() -> Pin<Box<dyn Future<Output = anyhow::Result<JsiValue<'a>>> + Send + 'a>>
         + Send
         + Sync
@@ -16,8 +16,7 @@ pub type CallbackType<'a> = Arc<
 >;
 
 pub fn clone_runtime_handle<'rt>(handle: &mut RuntimeHandle<'rt>) -> RuntimeHandle<'static> {
-    let inner_runtime_ptr: *mut jsi::sys::Runtime =
-        { handle.get_inner() as *const jsi::sys::Runtime as *mut jsi::sys::Runtime };
+    let inner_runtime_ptr: *mut jsi::sys::Runtime = handle.get_inner() as *const _ as *mut _;
 
     RuntimeHandle::new_unchecked(inner_runtime_ptr)
 }
@@ -43,10 +42,10 @@ impl SendableRuntimeHandle {
 unsafe impl Send for SendableRuntimeHandle {}
 unsafe impl Sync for SendableRuntimeHandle {}
 
-pub fn make_async<'rt>(
+pub fn _make_async<'rt>(
     rt: &mut jsi::RuntimeHandle<'rt>,
-    callback: CallbackType<'static>,
-    callInvoker: jsi::CallInvoker<'static>,
+    callback: _CallbackType<'static>,
+    _callInvoker: jsi::CallInvoker<'static>,
 ) -> anyhow::Result<jsi::JsiValue<'rt>> {
     let mut sendable_handle = SendableRuntimeHandle::new(clone_runtime_handle(rt));
 

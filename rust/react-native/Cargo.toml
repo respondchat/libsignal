@@ -21,6 +21,9 @@ rand = "0.8"
 uuid = "1.1.2"
 futures = "0.3"
 async-trait = "0.1.41"
+rayon = "1.8.0"
+hkdf = "0.12"
+sha2 = "0.10"
 
 [lib]
 # Android requires dynamic libraries, and iOS requires static ones
