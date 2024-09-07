@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(internal_features)]
+#![allow(dead_code)]
 #![feature(fmt_internals)]
 #![feature(type_alias_impl_trait)]
 #![feature(async_closure)]
@@ -17,9 +18,7 @@ use util::*;
 use aes_gcm_siv::aead::generic_array::typenum::Unsigned;
 use aes_gcm_siv::{AeadCore, KeyInit};
 use jsi::de::JsiDeserializeError;
-use jsi::{
-    host_object, CallInvoker, FromValue, IntoValue, JsiString, JsiValue, PropName, RuntimeHandle,
-};
+use jsi::{host_object, CallInvoker, IntoValue, JsiString, JsiValue, PropName, RuntimeHandle};
 use libsignal_core::{Aci, DeviceId, Pni, ProtocolAddress, ServiceId};
 use libsignal_protocol::kem::{self, Key as KemKey, KeyPair as KyberKeyPair, KeyType, Public};
 use libsignal_protocol::{
@@ -97,9 +96,9 @@ impl LibsignalAPI {
     #[host_object(method as KyberKeyPair_Generate)]
     pub fn KyberKeyPair_Generate(&self, _rt: &mut RuntimeHandle) -> anyhow::Result<i64> {
         let keyPair = KyberKeyPair::generate(KeyType::Kyber1024);
-        let keyPairPointer = Box::into_raw(Box::new(keyPair)) as i64;
+        let pointer = Box::into_raw(Box::new(keyPair)) as i64;
 
-        Ok(keyPairPointer)
+        Ok(pointer)
     }
 
     #[host_object(method as KyberKeyPair_GetPublicKey)]
@@ -109,8 +108,19 @@ impl LibsignalAPI {
         pointer: JsiValue<'rt>,
     ) -> anyhow::Result<i64> {
         let keyPair: &KyberKeyPair = get_reference_handle(pointer, rt)?;
-        let publicKeyPointer = Box::into_raw(Box::new(keyPair.public_key.clone())) as i64;
-        Ok(publicKeyPointer)
+        let pointer = Box::into_raw(Box::new(keyPair.public_key.clone())) as i64;
+        Ok(pointer)
+    }
+
+    #[host_object(method as KyberKeyPair_GetSecretKey)]
+    pub fn KyberKeyPair_GetSecretKey<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        pointer: JsiValue<'rt>,
+    ) -> anyhow::Result<i64> {
+        let keyPair: &KyberKeyPair = get_reference_handle(pointer, rt)?;
+        let pointer = Box::into_raw(Box::new(keyPair.secret_key.clone())) as i64;
+        Ok(pointer)
     }
 
     #[host_object(method as KyberPreKeyRecord_Serialize)]
@@ -345,7 +355,7 @@ impl LibsignalAPI {
         pointer: JsiValue<'rt>,
     ) -> anyhow::Result<i64> {
         let privateKey: &CurvePrivateKey = get_reference_handle(pointer, rt)?;
-        let publicKeyPointer = Box::into_raw(Box::new(privateKey.public_key())) as i64;
+        let publicKeyPointer = Box::into_raw(Box::new(privateKey.public_key()?)) as i64;
         Ok(publicKeyPointer)
     }
 
@@ -428,7 +438,7 @@ impl LibsignalAPI {
             signer_cert,
             &signer_key,
             &mut rng,
-        );
+        )?;
 
         let certPointer = Box::into_raw(Box::new(cert)) as i64;
 
@@ -1217,7 +1227,7 @@ impl LibsignalAPI {
         key: JsiValue<'rt>,
     ) -> anyhow::Result<i64> {
         let key = &get_buffer(key, rt)?;
-        let cipher = aes_gcm_siv::Aes256GcmSiv::new_from_slice(key);
+        let cipher = aes_gcm_siv::Aes256GcmSiv::new_from_slice(key)?;
 
         let cipher_ptr = Box::into_raw(Box::new(cipher)) as i64;
         Ok(cipher_ptr)
@@ -1588,7 +1598,7 @@ impl LibsignalAPI {
         bytes: JsiValue<'rt>,
     ) -> anyhow::Result<i64> {
         let buffer = get_buffer(bytes, rt)?;
-        let message = extract_decryption_error_message_from_serialized_content(&buffer);
+        let message = extract_decryption_error_message_from_serialized_content(&buffer)?;
         let message_ptr = Box::into_raw(Box::new(message)) as i64;
         Ok(message_ptr)
     }
@@ -2010,8 +2020,9 @@ impl LibsignalAPI {
             Some((PreKeyId::from(prekey_id), prekey))
         };
 
-        let signed_prekey: &CurvePublicKey = get_reference_handle(signed_prekey, rt)?;
-        let identity_key: &IdentityKey = get_reference_handle(identity_key, rt)?;
+        let signed_prekey: CurvePublicKey = *get_reference_handle(signed_prekey, rt)?;
+        let identity_key: CurvePublicKey = *get_reference_handle(identity_key, rt)?;
+        let identity_key = IdentityKey::new(identity_key);
         let signed_prekey_signature = get_buffer(signed_prekey_signature, rt)?;
 
         let mut bundle = PreKeyBundle::new(
@@ -2019,9 +2030,9 @@ impl LibsignalAPI {
             DeviceId::from(device_id as u32),
             prekey,
             SignedPreKeyId::from(signed_prekey_id as u32),
-            signed_prekey.clone(),
-            signed_prekey_signature.clone(),
-            identity_key.clone(),
+            signed_prekey,
+            signed_prekey_signature,
+            identity_key,
         )?;
 
         if !kyber_prekey_id.is_null()
@@ -4028,5 +4039,21 @@ impl LibsignalAPI {
         let serialized = content.serialized()?;
 
         Ok(serialize_bytes(rt, serialized)?)
+    }
+
+    #[host_object(method as Delete)]
+    pub fn Delete<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        pointer: JsiValue<'rt>,
+    ) -> anyhow::Result<jsi::JsiValue<'rt>> {
+        let pointer = get_number(pointer, rt)? as i64;
+
+        unsafe {
+            let pointer = pointer as *mut std::os::raw::c_void;
+            drop(Box::from_raw(pointer))
+        };
+
+        Ok(JsiValue::new_null())
     }
 }

@@ -6,7 +6,7 @@ use jsi::{FromObject, FromValue, JsiFn, JsiObject, JsiValue, PropName};
 use libsignal_core::ProtocolAddress;
 use libsignal_protocol::{
     Direction, GenericSignedPreKey, IdentityKey, IdentityKeyPair, IdentityKeyStore, KyberPreKeyId,
-    KyberPreKeyRecord, KyberPreKeyStore, PreKeyBundle, PreKeyId, PreKeyRecord, PreKeyStore,
+    KyberPreKeyRecord, KyberPreKeyStore, PreKeyId, PreKeyRecord, PreKeyStore, PrivateKey,
     SenderKeyRecord, SenderKeyStore, SessionRecord, SessionStore, SignalProtocolError,
     SignedPreKeyId, SignedPreKeyRecord, SignedPreKeyStore,
 };
@@ -24,22 +24,27 @@ impl<'rt> JSISenderKeyStore<'rt> {
         store_object: JsiValue<'rt>,
         mut rt: jsi::RuntimeHandle<'rt>,
     ) -> Result<Self, JsiDeserializeError> {
-        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a SenderKeyStore object"),
+        )?;
 
         let getSenderKey: JsiValue =
             store_object.get(PropName::new("_getSenderKey", &mut rt), &mut rt);
-        let getSenderKey: JsiObject = JsiObject::from_value(&getSenderKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let getSenderKey: JsiFn = JsiFn::from_object(&getSenderKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let getSenderKey: JsiObject = JsiObject::from_value(&getSenderKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getSenderKey property"),
+        )?;
+        let getSenderKey: JsiFn = JsiFn::from_object(&getSenderKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getSenderKey function"),
+        )?;
 
         let saveSenderKey: JsiValue =
             store_object.get(PropName::new("_saveSenderKey", &mut rt), &mut rt);
-        let saveSenderKey: JsiObject = JsiObject::from_value(&saveSenderKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let saveSenderKey: JsiFn = JsiFn::from_object(&saveSenderKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let saveSenderKey: JsiObject = JsiObject::from_value(&saveSenderKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveSenderKey property"),
+        )?;
+        let saveSenderKey: JsiFn = JsiFn::from_object(&saveSenderKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveSenderKey function"),
+        )?;
 
         Ok(Self {
             get_sender_key: getSenderKey,
@@ -130,21 +135,26 @@ impl<'rt> JSISessionStore<'rt> {
         store_object: JsiValue<'rt>,
         mut rt: jsi::RuntimeHandle<'rt>,
     ) -> Result<Self, JsiDeserializeError> {
-        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a SessionStore object"),
+        )?;
 
         let getSession: JsiValue = store_object.get(PropName::new("_getSession", &mut rt), &mut rt);
-        let getSession: JsiObject = JsiObject::from_value(&getSession, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let getSession: JsiFn = JsiFn::from_object(&getSession, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let getSession: JsiObject = JsiObject::from_value(&getSession, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getSession property"),
+        )?;
+        let getSession: JsiFn = JsiFn::from_object(&getSession, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getSession function"),
+        )?;
 
         let saveSession: JsiValue =
             store_object.get(PropName::new("_saveSession", &mut rt), &mut rt);
-        let saveSession: JsiObject = JsiObject::from_value(&saveSession, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let saveSession: JsiFn = JsiFn::from_object(&saveSession, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let saveSession: JsiObject = JsiObject::from_value(&saveSession, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveSession property"),
+        )?;
+        let saveSession: JsiFn = JsiFn::from_object(&saveSession, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveSession function"),
+        )?;
 
         Ok(Self {
             get_session: getSession,
@@ -159,20 +169,24 @@ impl<'rt> JSISessionStore<'rt> {
     ) -> Result<Option<SessionRecord>, String> {
         let rt = &mut self.rt;
 
-        let nativeAddress = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
+        let pointer = Box::into_raw(Box::new(address)) as i64;
+        let nativeAddress = JsiValue::new_number(pointer as f64);
 
         let result = self
             .get_session
             .call([nativeAddress], rt)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string());
 
-        if !result.is_object() {
-            return Ok(None);
+        let result = result?;
+
+        // unsafe { drop(Box::from_raw(pointer as *mut ProtocolAddress)) }
+
+        let record: Result<&SessionRecord, anyhow::Error> = get_reference(result, rt);
+
+        match record {
+            Ok(record) => Ok(Some(record.clone())),
+            Err(_) => Ok(None),
         }
-
-        let record: &SessionRecord = get_reference(result, rt).map_err(|e| e.to_string())?;
-
-        Ok(Some(record.clone()))
     }
 
     async fn do_save_session(
@@ -202,7 +216,7 @@ impl<'rt> SessionStore for JSISessionStore<'rt> {
     ) -> Result<Option<SessionRecord>, SignalProtocolError> {
         self.do_get_session(address.clone())
             .await
-            .map_err(|_| SignalProtocolError::SessionNotFound(address.clone()))
+            .map_err(|s| SignalProtocolError::InvalidArgument(s))
     }
 
     async fn store_session(
@@ -212,7 +226,7 @@ impl<'rt> SessionStore for JSISessionStore<'rt> {
     ) -> Result<(), SignalProtocolError> {
         self.do_save_session(address.clone(), record.clone())
             .await
-            .map_err(|_| SignalProtocolError::SessionNotFound(address.clone()))
+            .map_err(|s| SignalProtocolError::InvalidArgument(s))
     }
 }
 
@@ -228,30 +242,37 @@ impl<'rt> JSIKyberPreKeyStore<'rt> {
         store_object: JsiValue<'rt>,
         mut rt: jsi::RuntimeHandle<'rt>,
     ) -> Result<Self, JsiDeserializeError> {
-        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a KyberPreKeyStore object"),
+        )?;
 
         let getKyberPreKey: JsiValue =
             store_object.get(PropName::new("_getKyberPreKey", &mut rt), &mut rt);
-        let getKyberPreKey: JsiObject = JsiObject::from_value(&getKyberPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let getKyberPreKey: JsiFn = JsiFn::from_object(&getKyberPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let getKyberPreKey: JsiObject = JsiObject::from_value(&getKyberPreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getKyberPreKey property"),
+        )?;
+        let getKyberPreKey: JsiFn = JsiFn::from_object(&getKyberPreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getKyberPreKey function"),
+        )?;
 
         let saveKyberPreKey: JsiValue =
             store_object.get(PropName::new("_saveKyberPreKey", &mut rt), &mut rt);
-        let saveKyberPreKey: JsiObject = JsiObject::from_value(&saveKyberPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let saveKyberPreKey: JsiFn = JsiFn::from_object(&saveKyberPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let saveKyberPreKey: JsiObject = JsiObject::from_value(&saveKyberPreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveKyberPreKey property"),
+        )?;
+        let saveKyberPreKey: JsiFn = JsiFn::from_object(&saveKyberPreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveKyberPreKey function"),
+        )?;
 
         let markKyberPreKeyUsed: JsiValue =
             store_object.get(PropName::new("_markKyberPreKeyUsed", &mut rt), &mut rt);
-        let markKyberPreKeyUsed: JsiObject =
-            JsiObject::from_value(&markKyberPreKeyUsed, &mut rt)
-                .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let markKyberPreKeyUsed: JsiFn = JsiFn::from_object(&markKyberPreKeyUsed, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let markKyberPreKeyUsed: JsiObject = JsiObject::from_value(&markKyberPreKeyUsed, &mut rt)
+            .ok_or(JsiDeserializeError::custom(
+            "Expected a _markKyberPreKeyUsed property",
+        ))?;
+        let markKyberPreKeyUsed: JsiFn = JsiFn::from_object(&markKyberPreKeyUsed, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _markKyberPreKeyUsed function"),
+        )?;
 
         Ok(Self {
             get_kyber_pre_key: getKyberPreKey,
@@ -352,22 +373,27 @@ impl<'rt> JSISignedPreKeyStore<'rt> {
         store_object: JsiValue<'rt>,
         mut rt: jsi::RuntimeHandle<'rt>,
     ) -> Result<Self, JsiDeserializeError> {
-        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a SignedPreKeyStore object"),
+        )?;
 
         let getSignedPreKey: JsiValue =
             store_object.get(PropName::new("_getSignedPreKey", &mut rt), &mut rt);
-        let getSignedPreKey: JsiObject = JsiObject::from_value(&getSignedPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let getSignedPreKey: JsiFn = JsiFn::from_object(&getSignedPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let getSignedPreKey: JsiObject = JsiObject::from_value(&getSignedPreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getSignedPreKey object"),
+        )?;
+        let getSignedPreKey: JsiFn = JsiFn::from_object(&getSignedPreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getSignedPreKey function"),
+        )?;
 
         let saveSignedPreKey: JsiValue =
             store_object.get(PropName::new("_saveSignedPreKey", &mut rt), &mut rt);
-        let saveSignedPreKey: JsiObject = JsiObject::from_value(&saveSignedPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let saveSignedPreKey: JsiFn = JsiFn::from_object(&saveSignedPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let saveSignedPreKey: JsiObject = JsiObject::from_value(&saveSignedPreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveSignedPreKey object"),
+        )?;
+        let saveSignedPreKey: JsiFn = JsiFn::from_object(&saveSignedPreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveSignedPreKey function"),
+        )?;
 
         Ok(Self {
             get_signed_pre_key: getSignedPreKey,
@@ -446,26 +472,30 @@ impl<'rt> JSIPreKeyStore<'rt> {
         mut rt: jsi::RuntimeHandle<'rt>,
     ) -> Result<Self, JsiDeserializeError> {
         let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+            .ok_or(JsiDeserializeError::custom("Expected a PreKeyStore object"))?;
 
         let getPreKey: JsiValue = store_object.get(PropName::new("_getPreKey", &mut rt), &mut rt);
         let getPreKey: JsiObject = JsiObject::from_value(&getPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let getPreKey: JsiFn = JsiFn::from_object(&getPreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+            .ok_or(JsiDeserializeError::custom("Expected a _getPreKey object"))?;
+        let getPreKey: JsiFn = JsiFn::from_object(&getPreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getPreKey function"),
+        )?;
 
         let savePreKey: JsiValue = store_object.get(PropName::new("_savePreKey", &mut rt), &mut rt);
         let savePreKey: JsiObject = JsiObject::from_value(&savePreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let savePreKey: JsiFn = JsiFn::from_object(&savePreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+            .ok_or(JsiDeserializeError::custom("Expected a _savePreKey object"))?;
+        let savePreKey: JsiFn = JsiFn::from_object(&savePreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _savePreKey function"),
+        )?;
 
         let removePreKey: JsiValue =
             store_object.get(PropName::new("_removePreKey", &mut rt), &mut rt);
-        let removePreKey: JsiObject = JsiObject::from_value(&removePreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let removePreKey: JsiFn = JsiFn::from_object(&removePreKey, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let removePreKey: JsiObject = JsiObject::from_value(&removePreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _removePreKey object"),
+        )?;
+        let removePreKey: JsiFn = JsiFn::from_object(&removePreKey, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _removePreKey function"),
+        )?;
 
         Ok(Self {
             get_pre_key: getPreKey,
@@ -547,7 +577,7 @@ impl<'rt> PreKeyStore for JSIPreKeyStore<'rt> {
 }
 
 pub struct JSIIdentityKeyStore<'rt> {
-    get_identity_key_pair: JsiFn<'rt>,
+    get_identity_key: JsiFn<'rt>,
     get_local_registration_id: JsiFn<'rt>,
     save_identity: JsiFn<'rt>,
     is_trusted_identity: JsiFn<'rt>,
@@ -560,50 +590,60 @@ impl<'rt> JSIIdentityKeyStore<'rt> {
         store_object: JsiValue<'rt>,
         mut rt: jsi::RuntimeHandle<'rt>,
     ) -> Result<Self, JsiDeserializeError> {
-        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+        let store_object: JsiObject = JsiObject::from_value(&store_object, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a IdentityKeyStore object"),
+        )?;
 
-        let get_identity_key_pair: JsiValue =
-            store_object.get(PropName::new("_getIdentityKeyPair", &mut rt), &mut rt);
-        let get_identity_key_pair: JsiObject =
-            JsiObject::from_value(&get_identity_key_pair, &mut rt)
-                .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let get_identity_key_pair: JsiFn = JsiFn::from_object(&get_identity_key_pair, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let get_identity_key: JsiValue =
+            store_object.get(PropName::new("_getIdentityKey", &mut rt), &mut rt);
+        let get_identity_key: JsiObject = JsiObject::from_value(&get_identity_key, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getIdentityKey object"),
+        )?;
+        let get_identity_key: JsiFn = JsiFn::from_object(&get_identity_key, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getIdentityKey function"),
+        )?;
 
         let get_local_registration_id: JsiValue =
             store_object.get(PropName::new("_getLocalRegistrationId", &mut rt), &mut rt);
         let get_local_registration_id: JsiObject =
-            JsiObject::from_value(&get_local_registration_id, &mut rt)
-                .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+            JsiObject::from_value(&get_local_registration_id, &mut rt).ok_or(
+                JsiDeserializeError::custom("Expected a _getLocalRegistrationId object"),
+            )?;
         let get_local_registration_id: JsiFn =
-            JsiFn::from_object(&get_local_registration_id, &mut rt)
-                .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+            JsiFn::from_object(&get_local_registration_id, &mut rt).ok_or(
+                JsiDeserializeError::custom("Expected a _getLocalRegistrationId function"),
+            )?;
 
         let save_identity: JsiValue =
             store_object.get(PropName::new("_saveIdentity", &mut rt), &mut rt);
-        let save_identity: JsiObject = JsiObject::from_value(&save_identity, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let save_identity: JsiFn = JsiFn::from_object(&save_identity, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let save_identity: JsiObject = JsiObject::from_value(&save_identity, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveIdentity object"),
+        )?;
+        let save_identity: JsiFn = JsiFn::from_object(&save_identity, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _saveIdentity function"),
+        )?;
 
         let is_trusted_identity: JsiValue =
             store_object.get(PropName::new("_isTrustedIdentity", &mut rt), &mut rt);
-        let is_trusted_identity: JsiObject =
-            JsiObject::from_value(&is_trusted_identity, &mut rt)
-                .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let is_trusted_identity: JsiFn = JsiFn::from_object(&is_trusted_identity, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let is_trusted_identity: JsiObject = JsiObject::from_value(&is_trusted_identity, &mut rt)
+            .ok_or(JsiDeserializeError::custom(
+            "Expected a _isTrustedIdentity object",
+        ))?;
+        let is_trusted_identity: JsiFn = JsiFn::from_object(&is_trusted_identity, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _isTrustedIdentity function"),
+        )?;
 
         let get_identity: JsiValue =
             store_object.get(PropName::new("_getIdentity", &mut rt), &mut rt);
-        let get_identity: JsiObject = JsiObject::from_value(&get_identity, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected an object"))?;
-        let get_identity: JsiFn = JsiFn::from_object(&get_identity, &mut rt)
-            .ok_or(JsiDeserializeError::custom("Expected a function"))?;
+        let get_identity: JsiObject = JsiObject::from_value(&get_identity, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getIdentity object"),
+        )?;
+        let get_identity: JsiFn = JsiFn::from_object(&get_identity, &mut rt).ok_or(
+            JsiDeserializeError::custom("Expected a _getIdentity function"),
+        )?;
 
         Ok(Self {
-            get_identity_key_pair,
+            get_identity_key,
             get_local_registration_id,
             save_identity,
             is_trusted_identity,
@@ -615,12 +655,16 @@ impl<'rt> JSIIdentityKeyStore<'rt> {
     async fn do_get_identity_key_pair(&mut self) -> Result<IdentityKeyPair, String> {
         let rt = &mut self.rt;
         let result = self
-            .get_identity_key_pair
+            .get_identity_key
             .call([], rt)
             .map_err(|e| e.to_string())?;
 
-        let pair: &IdentityKeyPair = get_reference(result, rt).map_err(|e| e.to_string())?;
-        Ok(pair.clone())
+        let privateKey: PrivateKey = *get_reference(result, rt).map_err(|e| e.to_string())?;
+        let publiceKey = privateKey.public_key().map_err(|e| e.to_string())?;
+        let identityKey = IdentityKey::new(publiceKey);
+        let pair = IdentityKeyPair::new(identityKey, privateKey);
+
+        Ok(pair)
     }
 
     async fn do_get_local_registration_id(&mut self) -> Result<u32, String> {

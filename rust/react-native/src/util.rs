@@ -1,6 +1,5 @@
-use core::fmt;
-
 use anyhow::anyhow;
+use core::fmt;
 use jsi::de::JsiDeserializeError;
 use jsi::ser::JsiSerializeError;
 use jsi::{
@@ -9,6 +8,7 @@ use jsi::{
 };
 use libsignal_core::Aci;
 use serde::de::Error;
+use serde::ser::Error as _;
 
 pub fn console_log(message: &str, rt: &mut RuntimeHandle) -> anyhow::Result<()> {
     let console = PropName::new("console", rt);
@@ -30,20 +30,25 @@ pub fn serialize_bytes<'rt>(
     rt: &mut RuntimeHandle<'rt>,
     v: &[u8],
 ) -> Result<JsiValue<'rt>, JsiSerializeError> {
-    let array_buffer_ctor = rt.global().get(PropName::new("ArrayBuffer", rt), rt);
-    let array_buffer_ctor: JsiFn = array_buffer_ctor
+    let buffer_ctor = rt.global().get(PropName::new("Buffer", rt), rt);
+    let buffer_ctor: JsiFn = buffer_ctor
         .try_into_js(rt)
-        .expect("ArrayBuffer constructor is not a function");
-    let array_buffer = array_buffer_ctor
+        .ok_or(JsiSerializeError::custom("Buffer constructor not found"))?;
+    let buffer = buffer_ctor
         .call_as_constructor(vec![JsiValue::new_number(v.len() as f64)], rt)
-        .expect("ArrayBuffer constructor threw an exception");
+        .map_err(|e| JsiSerializeError::custom(format!("Buffer constructor failed: {:?}", e)))?;
+
+    let buffer = JsiObject::from_value(&buffer, rt)
+        .ok_or(JsiSerializeError::custom("Expected an object"))?;
+    let array_buffer = buffer.get(PropName::new("buffer", rt), rt);
+
     let array_buffer: JsiArrayBuffer = array_buffer
         .try_into_js(rt)
-        .expect("ArrayBuffer constructor did not return an ArrayBuffer");
+        .ok_or(JsiSerializeError::custom("Expected an ArrayBuffer"))?;
 
     array_buffer.data(rt).copy_from_slice(v);
 
-    Ok(array_buffer.into_value(rt))
+    Ok(buffer.into_value(rt))
 }
 
 pub fn get_buffer<'rt>(
@@ -87,8 +92,9 @@ pub fn get_reference_handle<'rt, T>(
     wrapper: JsiValue<'rt>,
     rt: &mut RuntimeHandle<'rt>,
 ) -> anyhow::Result<&'rt T> {
-    let wrapper = JsiObject::from_value(&wrapper, rt)
-        .ok_or(JsiDeserializeError::custom("Expected an object"))?;
+    let wrapper = JsiObject::from_value(&wrapper, rt).ok_or(JsiDeserializeError::custom(
+        "Expected an { _nativeHandle } Object",
+    ))?;
 
     let handle = wrapper.get(PropName::new("_nativeHandle", rt), rt);
 
@@ -176,7 +182,7 @@ pub fn get_array_of_handles<'rt, T>(
     for value in array.drain(..) {
         let handle: &T = get_reference_handle(value, rt)?;
 
-        result.push(handle.clone());
+        result.push(handle);
     }
 
     Ok(result)
