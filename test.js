@@ -8,87 +8,90 @@ store = {
 	preKeys: {},
 	identies: {},
 	identity: Libsignal.PrivateKey_Generate(),
-	_getIdentityKey() {
-		return store.identity
-	},
 	_saveSenderKey(sender, distributionId, record) {
 		sender = Libsignal.ProtocolAddress_Name({ _nativeHandle: sender })
-		console.log("_saveSenderKey", sender, distributionId, record)
+		console.log("_saveSenderKey", sender, distributionId, record, "this", this)
 		store.senderKeys[sender] = record
 	},
 	_getSenderKey(sender, distributionId) {
 		sender = Libsignal.ProtocolAddress_Name({ _nativeHandle: sender })
-		console.log("_getSenderKey", sender, distributionId)
+		console.log("_getSenderKey", sender, distributionId, "this", this)
 		return store.senderKeys[sender]
 	},
 	_getSession(sender) {
 		sender = Libsignal.ProtocolAddress_Name({ _nativeHandle: sender })
-		console.log("_getSession", sender)
+		console.log("_getSession", sender, store.sessions[sender], "this", this)
 		return store.sessions[sender]
 	},
 	_saveSession(sender, record) {
 		sender = Libsignal.ProtocolAddress_Name({ _nativeHandle: sender })
-		console.log("_saveSession", sender, record)
+		console.log("_saveSession", sender, record, "this", this)
 		store.sessions[sender] = record
 	},
 	_getKyberPreKey(kyberPreKeyId) {
-		console.log("_getKyberPreKey", kyberPreKeyId)
+		console.log("_getKyberPreKey", kyberPreKeyId, "this", this)
 		return store.kybers[kyberPreKeyId]
 	},
 	_saveKyberPreKey(kyberPreKeyId, record) {
-		console.log("_saveKyberPreKey", kyberPreKeyId, record)
+		console.log("_saveKyberPreKey", kyberPreKeyId, record, "this", this)
 		store.kybers[kyberPreKeyId] = record
 	},
 	_markKyberPreKeyUsed(kyberPreKeyId) {
-		console.log("_markKyberPreKeyUsed", kyberPreKeyId)
+		console.log("_markKyberPreKeyUsed", kyberPreKeyId, "this", this)
 	},
 	_saveSignedPreKey(signedPreKeyId, record) {
-		console.log("_saveSignedPreKey", signedPreKeyId, record)
+		console.log("_saveSignedPreKey", signedPreKeyId, record, "this", this)
 		store.signedPreKeys[signedPreKeyId] = record
 	},
 	_getSignedPreKey(signedPreKeyId) {
-		console.log("_getSignedPreKey", signedPreKeyId)
+		console.log("_getSignedPreKey", signedPreKeyId, "this", this)
 		return store.signedPreKeys[signedPreKeyId]
 	},
 	_savePreKey(preKeyId, record) {
-		console.log("_savePreKey", preKeyId, record)
+		console.log("_savePreKey", preKeyId, record, "this", this)
 		store.preKeys[preKeyId] = record
 	},
 	_getPreKey(preKeyId) {
-		console.log("_getPreKey", preKeyId)
+		console.log("_getPreKey", preKeyId, "this", this)
 		return store.preKeys[preKeyId]
 	},
 	_removePreKey(preKeyId) {
-		console.log("_removePreKey", preKeyId)
+		console.log("_removePreKey", preKeyId, "this", this)
 		delete store.preKeys[preKeyId]
 	},
 	_getIdentityKey() {
-		console.log("_getIdentityKey")
+		console.log("_getIdentityKey", "this", this)
 		return store.identity
 	},
 	_getLocalRegistrationId() {
-		console.log("_getLocalRegistrationId")
+		console.log("_getLocalRegistrationId", "this", this)
 		return store.registration_id
 	},
 	_saveIdentity(name, key) {
 		name = Libsignal.ProtocolAddress_Name({ _nativeHandle: name })
-		console.log("_saveIdentity", name)
+		console.log("_saveIdentity", name, "this", this)
 
 		store.identies[name] = key
+		return true
 	},
 	_isTrustedIdentity(name, key, sending) {
 		name = Libsignal.ProtocolAddress_Name({ _nativeHandle: name })
-		console.log("_isTrustedIdentity", name)
+		console.log("_isTrustedIdentity", name, "this", this)
 		return true
 	},
 	_getIdentity(name) {
 		name = Libsignal.ProtocolAddress_Name({ _nativeHandle: name })
-		console.log("_getIdentity", name)
+		console.log("_getIdentity", name, "this", this)
 
 		return store.identies[name]
 	}
 }
 
+Object.keys(store).forEach(key => {
+	if (typeof store[key] === "function") {
+		store[key] = store[key].bind(store)
+	}
+})
 
 prekey_id = 1
 prekey_privateKey = Libsignal.PrivateKey_Generate()
@@ -137,3 +140,10 @@ bundle = Libsignal.PreKeyBundle_New(
 address = Libsignal.ProtocolAddress_New("test", store.device_id)
 
 Libsignal.SessionBuilder_ProcessPreKeyBundle({ _nativeHandle: bundle }, { _nativeHandle: address }, store, store, Date.now())
+
+msg = Libsignal.SessionCipher_EncryptMessage(Buffer.from("test"), { _nativeHandle: address }, store, store, Date.now())
+
+serialized = Libsignal.CiphertextMessage_Serialize({ _nativeHandle: msg })
+
+ciphertext = Libsignal.PreKeySignalMessage_Deserialize(serialized)
+

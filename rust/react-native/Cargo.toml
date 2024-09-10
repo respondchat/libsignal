@@ -1,3 +1,5 @@
+cargo-features = ["profile-rustflags"]
+
 [package]
 name = "react-native"
 version = "0.1.0"
@@ -12,7 +14,7 @@ poksho = { path = "../poksho" }
 signal-crypto = { path = "../crypto" }
 zkcredential = { path = "../zkcredential", features = ["rayon"] }
 zkgroup = { path = "../zkgroup", features = [] }
-jsi = "0.3.0-alpha.5"
+jsi = { git = "https://github.com/respondchat/jsi-rs", branch = "master" }
 anyhow = { version = "1.0", features = ["backtrace"], default-features = true }
 jni = "0.21.1"
 cxx = "1.0.106"
@@ -40,3 +42,8 @@ linker = "/Users/user/Developer/respond/libsignal-typescript/libsignal/rust/reac
 [target.i686-linux-android]
 ar = "/Users/user/Developer/respond/libsignal-typescript/libsignal/rust/react-native/NDK/x86/bin/i686-linux-android-ar"
 linker = "/Users/user/Developer/respond/libsignal-typescript/libsignal/rust/react-native/NDK/x86/bin/i686-linux-android-clang"
+
+[profile.release]
+lto = true
+opt-level = 3
+strip = true

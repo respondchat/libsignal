@@ -1993,8 +1993,7 @@ dependencies = [
 [[package]]
 name = "jsi"
 version = "0.3.0-alpha.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7fc3dbd0c5c4595d5ed66292d2466fe1367596ed2972ebde9453c7374e21502"
+source = "git+https://github.com/respondchat/jsi-rs?branch=master#edbb9b5865763630af777f0a87802fe1b6c4f0c8"
 dependencies = [
  "anyhow",
  "better_any",
@@ -2008,8 +2007,7 @@ dependencies = [
 [[package]]
 name = "jsi-macros"
 version = "0.3.1-alpha.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fb0bd4a4efa9bf7b595a1019ba581137766810429657906bdf9125e322bb2d1"
+source = "git+https://github.com/respondchat/jsi-rs?branch=master#edbb9b5865763630af777f0a87802fe1b6c4f0c8"
 dependencies = [
  "Inflector",
  "proc-macro-error",
@@ -2021,8 +2019,7 @@ dependencies = [
 [[package]]
 name = "jsi-sys"
 version = "0.3.0-alpha.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62200671d705e2df48fa58321ec0f8946799660f050cdbb97b70418c34056a5f"
+source = "git+https://github.com/respondchat/jsi-rs?branch=master#edbb9b5865763630af777f0a87802fe1b6c4f0c8"
 dependencies = [
  "anyhow",
  "cxx",

@@ -5,10 +5,10 @@ use jsi::de::JsiDeserializeError;
 use jsi::{FromObject, FromValue, JsiFn, JsiObject, JsiValue, PropName};
 use libsignal_core::ProtocolAddress;
 use libsignal_protocol::{
-    Direction, GenericSignedPreKey, IdentityKey, IdentityKeyPair, IdentityKeyStore, KyberPreKeyId,
-    KyberPreKeyRecord, KyberPreKeyStore, PreKeyId, PreKeyRecord, PreKeyStore, PrivateKey,
-    SenderKeyRecord, SenderKeyStore, SessionRecord, SessionStore, SignalProtocolError,
-    SignedPreKeyId, SignedPreKeyRecord, SignedPreKeyStore,
+    Direction, IdentityKey, IdentityKeyPair, IdentityKeyStore, KyberPreKeyId, KyberPreKeyRecord,
+    KyberPreKeyStore, PreKeyId, PreKeyRecord, PreKeyStore, PrivateKey, SenderKeyRecord,
+    SenderKeyStore, SessionRecord, SessionStore, SignalProtocolError, SignedPreKeyId,
+    SignedPreKeyRecord, SignedPreKeyStore,
 };
 use serde::de::Error;
 use uuid::Uuid;
@@ -89,8 +89,7 @@ impl<'rt> JSISenderKeyStore<'rt> {
         let distribution_id =
             serialize_bytes(rt, distribution_id.as_bytes()).map_err(|e| e.to_string())?;
         let nativeAddress = JsiValue::new_number(Box::into_raw(Box::new(sender)) as i64 as f64);
-        let record = record.serialize().map_err(|e| e.to_string())?;
-        let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
+        let record = JsiValue::new_number(Box::into_raw(Box::new(record)) as i64 as f64);
 
         self.save_sender_key
             .call([nativeAddress, distribution_id, record], rt)
@@ -169,24 +168,21 @@ impl<'rt> JSISessionStore<'rt> {
     ) -> Result<Option<SessionRecord>, String> {
         let rt = &mut self.rt;
 
-        let pointer = Box::into_raw(Box::new(address)) as i64;
-        let nativeAddress = JsiValue::new_number(pointer as f64);
+        let pointerAddress = Box::into_raw(Box::new(address)) as i64;
+        let nativeAddress = JsiValue::new_number(pointerAddress as f64);
 
         let result = self
             .get_session
             .call([nativeAddress], rt)
-            .map_err(|e| e.to_string());
+            .map_err(|e| e.to_string())?;
 
-        let result = result?;
-
-        // unsafe { drop(Box::from_raw(pointer as *mut ProtocolAddress)) }
-
-        let record: Result<&SessionRecord, anyhow::Error> = get_reference(result, rt);
-
-        match record {
-            Ok(record) => Ok(Some(record.clone())),
-            Err(_) => Ok(None),
+        if !result.is_number() {
+            return Ok(None);
         }
+
+        let record: &SessionRecord = get_reference(result, rt).map_err(|e| e.to_string())?;
+
+        Ok(Some(record.clone()))
     }
 
     async fn do_save_session(
@@ -196,12 +192,11 @@ impl<'rt> JSISessionStore<'rt> {
     ) -> Result<(), String> {
         let rt = &mut self.rt;
 
-        let nativeAddress = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
-        let record = record.serialize().map_err(|e| e.to_string())?;
-        let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
+        let address = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
+        let record = JsiValue::new_number(Box::into_raw(Box::new(record)) as i64 as f64);
 
         self.save_session
-            .call([nativeAddress, record], rt)
+            .call([address, record], rt)
             .map_err(|e| e.to_string())?;
 
         Ok(())
@@ -306,8 +301,7 @@ impl<'rt> JSIKyberPreKeyStore<'rt> {
     ) -> Result<(), String> {
         let rt = &mut self.rt;
         let key_id_value = JsiValue::new_number(u32::from(kyber_prekey_id) as f64);
-        let record = record.serialize().map_err(|e| e.to_string())?;
-        let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
+        let record = JsiValue::new_number(Box::into_raw(Box::new(record)) as i64 as f64);
 
         self.save_kyber_pre_key
             .call([key_id_value, record], rt)
@@ -426,8 +420,7 @@ impl<'rt> JSISignedPreKeyStore<'rt> {
     ) -> Result<(), String> {
         let rt = &mut self.rt;
         let key_id_value = JsiValue::new_number(u32::from(signed_prekey_id) as f64);
-        let record = record.serialize().map_err(|e| e.to_string())?;
-        let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
+        let record = JsiValue::new_number(Box::into_raw(Box::new(record)) as i64 as f64);
 
         self.save_signed_pre_key
             .call([key_id_value, record], rt)
@@ -526,8 +519,7 @@ impl<'rt> JSIPreKeyStore<'rt> {
     ) -> Result<(), String> {
         let rt = &mut self.rt;
         let key_id_value = JsiValue::new_number(u32::from(prekey_id) as f64);
-        let record = record.serialize().map_err(|e| e.to_string())?;
-        let record = serialize_bytes(rt, &record).map_err(|e| e.to_string())?;
+        let record = JsiValue::new_number(Box::into_raw(Box::new(record)) as i64 as f64);
 
         self.save_pre_key
             .call([key_id_value, record], rt)
@@ -686,12 +678,12 @@ impl<'rt> JSIIdentityKeyStore<'rt> {
     ) -> Result<bool, String> {
         let rt = &mut self.rt;
         let native_address = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
-        let identity_value =
-            serialize_bytes(rt, &identity.serialize()).map_err(|e| e.to_string())?;
+        let public_key = *identity.public_key();
+        let public_key = JsiValue::new_number(Box::into_raw(Box::new(public_key)) as i64 as f64);
 
         let result = self
             .save_identity
-            .call([native_address, identity_value], rt)
+            .call([native_address, public_key], rt)
             .map_err(|e| e.to_string())?;
 
         let result = get_bool(result, rt).map_err(|e| e.to_string())?;
@@ -707,13 +699,13 @@ impl<'rt> JSIIdentityKeyStore<'rt> {
     ) -> Result<bool, String> {
         let rt = &mut self.rt;
         let native_address = JsiValue::new_number(Box::into_raw(Box::new(address)) as i64 as f64);
-        let identity_value =
-            serialize_bytes(rt, &identity.serialize()).map_err(|e| e.to_string())?;
+        let public_key = *identity.public_key();
+        let public_key = JsiValue::new_number(Box::into_raw(Box::new(public_key)) as i64 as f64);
         let direction_value = JsiValue::new_number(direction as i32 as f64);
 
         let result = self
             .is_trusted_identity
-            .call([native_address, identity_value, direction_value], rt)
+            .call([native_address, public_key, direction_value], rt)
             .map_err(|e| e.to_string())?;
 
         let result = get_bool(result, rt).map_err(|e| e.to_string())?;
@@ -733,7 +725,7 @@ impl<'rt> JSIIdentityKeyStore<'rt> {
             .call([native_address], rt)
             .map_err(|e| e.to_string())?;
 
-        if !result.is_object() {
+        if !result.is_number() {
             return Ok(None);
         }
 

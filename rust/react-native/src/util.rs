@@ -55,6 +55,10 @@ pub fn get_buffer<'rt>(
     value: JsiValue<'rt>,
     rt: &mut RuntimeHandle<'rt>,
 ) -> anyhow::Result<Vec<u8>> {
+    if !value.is_object() {
+        return Err(anyhow!("Expected an Buffer"));
+    }
+
     let value = JsiObject::from_value(&value, rt)
         .ok_or(JsiDeserializeError::custom("Expected an Buffer"))?;
 
@@ -67,10 +71,18 @@ pub fn get_buffer<'rt>(
 }
 
 pub fn get_number<'rt>(value: JsiValue<'rt>, rt: &mut RuntimeHandle<'rt>) -> anyhow::Result<f64> {
+    if !value.is_number() {
+        return Err(anyhow!("Expected a number"));
+    }
+
     Ok(f64::from_value(&value, rt).ok_or(JsiDeserializeError::custom("Expected a number"))?)
 }
 
 pub fn get_bool<'rt>(value: JsiValue<'rt>, rt: &mut RuntimeHandle<'rt>) -> anyhow::Result<bool> {
+    if !value.is_bool() {
+        return Err(anyhow!("Expected a boolean"));
+    }
+
     Ok(bool::from_value(&value, rt).ok_or(JsiDeserializeError::custom("Expected a boolean"))?)
 }
 
@@ -78,6 +90,10 @@ pub fn get_string<'rt>(
     value: JsiValue<'rt>,
     rt: &mut RuntimeHandle<'rt>,
 ) -> anyhow::Result<String> {
+    if !value.is_string() {
+        return Err(anyhow!("Expected a string"));
+    }
+
     let value = JsiString::from_value(&value, rt)
         .ok_or(JsiDeserializeError::custom("Expected a string"))?;
 
@@ -92,6 +108,10 @@ pub fn get_reference_handle<'rt, T>(
     wrapper: JsiValue<'rt>,
     rt: &mut RuntimeHandle<'rt>,
 ) -> anyhow::Result<&'rt T> {
+    if !wrapper.is_object() {
+        return Err(anyhow!("Expected an {{ _nativeHandle }} Object"));
+    }
+
     let wrapper = JsiObject::from_value(&wrapper, rt).ok_or(JsiDeserializeError::custom(
         "Expected an { _nativeHandle } Object",
     ))?;
@@ -105,6 +125,10 @@ pub fn get_reference_handle_mut<'rt, T>(
     wrapper: JsiValue<'rt>,
     rt: &mut RuntimeHandle<'rt>,
 ) -> anyhow::Result<&'rt mut T> {
+    if !wrapper.is_object() {
+        return Err(anyhow!("Expected an object"));
+    }
+
     let wrapper = JsiObject::from_value(&wrapper, rt)
         .ok_or(JsiDeserializeError::custom("Expected an object"))?;
 
@@ -117,6 +141,10 @@ pub fn get_reference<'rt, T>(
     pointer_value: JsiValue<'rt>,
     rt: &mut RuntimeHandle<'rt>,
 ) -> anyhow::Result<&'rt T> {
+    if !pointer_value.is_number() {
+        return Err(anyhow!("Expected a number"));
+    }
+
     let pointer = get_number(pointer_value, rt)? as i64;
 
     let reference = unsafe { &*(pointer as *const T) };
@@ -128,6 +156,10 @@ pub fn get_reference_mut<'rt, T>(
     pointer_value: JsiValue<'rt>,
     rt: &mut RuntimeHandle<'rt>,
 ) -> anyhow::Result<&'rt mut T> {
+    if !pointer_value.is_number() {
+        return Err(anyhow!("Expected a number"));
+    }
+
     let pointer = get_number(pointer_value, rt)? as i64;
 
     let reference = unsafe { &mut *(pointer as *mut T) };
@@ -139,6 +171,10 @@ pub fn get_array<'rt>(
     array: JsiValue<'rt>,
     rt: &mut RuntimeHandle<'rt>,
 ) -> anyhow::Result<Vec<JsiValue<'rt>>> {
+    if !array.is_object() {
+        return Err(anyhow!("Expected an array"));
+    }
+
     let array = JsiObject::from_value(&array, rt)
         .ok_or(JsiDeserializeError::custom("Expected an object"))?;
 

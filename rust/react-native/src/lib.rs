@@ -28,8 +28,8 @@ use libsignal_protocol::{
     process_sender_key_distribution_message, sealed_sender_decrypt, sealed_sender_decrypt_to_usmc,
     sealed_sender_encrypt_from_usmc, sealed_sender_multi_recipient_encrypt, CiphertextMessage,
     CiphertextMessageType, ContentHint, DecryptionErrorMessage, GenericSignedPreKey, IdentityKey,
-    IdentityKeyPair, KeyPair as CurveKeyPair, KyberPreKeyId, KyberPreKeyRecord, PreKeyBundle,
-    PreKeyId, PreKeyRecord, PreKeySignalMessage, PrivateKey as CurvePrivateKey,
+    IdentityKeyPair, KeyPair as CurveKeyPair, KyberPreKeyId, KyberPreKeyRecord, PlaintextContent,
+    PreKeyBundle, PreKeyId, PreKeyRecord, PreKeySignalMessage, PrivateKey as CurvePrivateKey,
     PublicKey as CurvePublicKey, SealedSenderDecryptionResult, SealedSenderV2SentMessage,
     SenderCertificate, SenderKeyDistributionMessage, SenderKeyMessage, SenderKeyRecord,
     ServerCertificate, SessionRecord, SignalMessage, SignedPreKeyId, SignedPreKeyRecord, Timestamp,
@@ -2618,7 +2618,7 @@ impl LibsignalAPI {
         session_store: JsiValue<'rt>,
         identity_key_store: JsiValue<'rt>,
         now: JsiValue<'rt>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<JsiValue<'rt>> {
         let bundle: &PreKeyBundle = get_reference_handle(bundle, rt)?;
         let protocol_address: &ProtocolAddress = get_reference_handle(protocol_address, rt)?;
         let mut session_store = JSISessionStore::new(session_store, clone_runtime_handle(rt))?;
@@ -2636,7 +2636,7 @@ impl LibsignalAPI {
             &mut rng,
         ))?;
 
-        Ok(())
+        Ok(JsiValue::new_null())
     }
 
     #[host_object(method as SessionCipher_DecryptPreKeySignalMessage)]
@@ -4038,6 +4038,149 @@ impl LibsignalAPI {
 
         let serialized = content.serialized()?;
 
+        Ok(serialize_bytes(rt, serialized)?)
+    }
+
+    #[host_object(method as CiphertextMessage_FromPlaintextContent)]
+    pub fn CiphertextMessage_FromPlaintextContent<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        obj: JsiValue<'rt>,
+    ) -> anyhow::Result<jsi::JsiValue<'rt>> {
+        let content: &PlaintextContent = get_reference_handle(obj, rt)?;
+
+        let serialized = CiphertextMessage::PlaintextContent(content.clone());
+        let buffer = serialized.serialize();
+
+        Ok(serialize_bytes(rt, buffer)?)
+    }
+
+    #[host_object(method as CiphertextMessage_Serialize)]
+    pub fn CiphertextMessage_Serialize<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        obj: JsiValue<'rt>,
+    ) -> anyhow::Result<jsi::JsiValue<'rt>> {
+        let content: &CiphertextMessage = get_reference_handle(obj, rt)?;
+
+        let buffer = content.serialize();
+
+        Ok(serialize_bytes(rt, buffer)?)
+    }
+
+    #[host_object(method as CiphertextMessage_Type)]
+    pub fn CiphertextMessage_Type<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        obj: JsiValue<'rt>,
+    ) -> anyhow::Result<i64> {
+        let content: &CiphertextMessage = get_reference_handle(obj, rt)?;
+
+        let message_type = content.message_type();
+
+        Ok(message_type as i64)
+    }
+
+    #[host_object(method as PreKeySignalMessage_Deserialize)]
+    pub fn PreKeySignalMessage_Deserialize<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        data: JsiValue<'rt>,
+    ) -> anyhow::Result<i64> {
+        let buffer = get_buffer(data, rt)?;
+        let pre_key_signal_message = PreKeySignalMessage::try_from(buffer.as_slice())?;
+        let pre_key_signal_message_ptr = Box::into_raw(Box::new(pre_key_signal_message)) as i64;
+        Ok(pre_key_signal_message_ptr)
+    }
+
+    #[host_object(method as PreKeySignalMessage_GetPreKeyId)]
+    pub fn PreKeySignalMessage_GetPreKeyId<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        obj: JsiValue<'rt>,
+    ) -> anyhow::Result<Option<u32>> {
+        let pre_key_signal_message: &PreKeySignalMessage = get_reference_handle(obj, rt)?;
+        Ok(pre_key_signal_message.pre_key_id().map(|id| id.into()))
+    }
+
+    #[host_object(method as PreKeySignalMessage_GetRegistrationId)]
+    pub fn PreKeySignalMessage_GetRegistrationId<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        obj: JsiValue<'rt>,
+    ) -> anyhow::Result<u32> {
+        let pre_key_signal_message: &PreKeySignalMessage = get_reference_handle(obj, rt)?;
+        Ok(pre_key_signal_message.registration_id())
+    }
+
+    #[host_object(method as PreKeySignalMessage_GetSignedPreKeyId)]
+    pub fn PreKeySignalMessage_GetSignedPreKeyId<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        obj: JsiValue<'rt>,
+    ) -> anyhow::Result<u32> {
+        let pre_key_signal_message: &PreKeySignalMessage = get_reference_handle(obj, rt)?;
+        Ok(pre_key_signal_message.signed_pre_key_id().into())
+    }
+
+    #[host_object(method as PreKeySignalMessage_GetVersion)]
+    pub fn PreKeySignalMessage_GetVersion<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        obj: JsiValue<'rt>,
+    ) -> anyhow::Result<u8> {
+        let pre_key_signal_message: &PreKeySignalMessage = get_reference_handle(obj, rt)?;
+        Ok(pre_key_signal_message.message_version())
+    }
+
+    #[host_object(method as PreKeySignalMessage_New)]
+    pub fn PreKeySignalMessage_New<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        message_version: JsiValue<'rt>,
+        registration_id: JsiValue<'rt>,
+        pre_key_id: JsiValue<'rt>,
+        signed_pre_key_id: JsiValue<'rt>,
+        base_key: JsiValue<'rt>,
+        identity_key: JsiValue<'rt>,
+        signal_message: JsiValue<'rt>,
+    ) -> anyhow::Result<i64> {
+        let message_version = get_number(message_version, rt)? as u8;
+        let registration_id = get_number(registration_id, rt)? as u32;
+        let pre_key_id = if pre_key_id.is_null() {
+            None
+        } else {
+            Some(PreKeyId::from(get_number(pre_key_id, rt)? as u32))
+        };
+        let signed_pre_key_id = SignedPreKeyId::from(get_number(signed_pre_key_id, rt)? as u32);
+        let base_key: CurvePublicKey = *get_reference_handle(base_key, rt)?;
+        let identity_key: CurvePublicKey = *get_reference_handle(identity_key, rt)?;
+        let identity_key = IdentityKey::new(identity_key);
+        let signal_message: &SignalMessage = get_reference_handle(signal_message, rt)?;
+
+        let pre_key_signal_message = PreKeySignalMessage::new(
+            message_version,
+            registration_id,
+            pre_key_id,
+            signed_pre_key_id,
+            None,
+            base_key,
+            identity_key,
+            signal_message.clone(),
+        )?;
+
+        let pre_key_signal_message_ptr = Box::into_raw(Box::new(pre_key_signal_message)) as i64;
+        Ok(pre_key_signal_message_ptr)
+    }
+
+    #[host_object(method as PreKeySignalMessage_Serialize)]
+    pub fn PreKeySignalMessage_Serialize<'rt>(
+        &self,
+        rt: &mut RuntimeHandle<'rt>,
+        obj: JsiValue<'rt>,
+    ) -> anyhow::Result<jsi::JsiValue<'rt>> {
+        let pre_key_signal_message: &PreKeySignalMessage = get_reference_handle(obj, rt)?;
+        let serialized = pre_key_signal_message.serialized();
         Ok(serialize_bytes(rt, serialized)?)
     }
 
