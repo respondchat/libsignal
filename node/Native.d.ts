@@ -55,43 +55,43 @@ interface SealedSenderMultiRecipientMessage {
 }
 
 export abstract class IdentityKeyStore {
-	_getIdentityKey(): Promise<PrivateKey>;
-	_getLocalRegistrationId(): Promise<number>;
-	_saveIdentity(name: ProtocolAddress, key: PublicKey): Promise<boolean>;
+	_getIdentityKey(): PrivateKey;
+	_getLocalRegistrationId(): number;
+	_saveIdentity(name: ProtocolAddress, key: PublicKey): boolean;
 	_isTrustedIdentity(
 		name: ProtocolAddress,
 		key: PublicKey,
 		sending: boolean
-	): Promise<boolean>;
-	_getIdentity(name: ProtocolAddress): Promise<PublicKey | null>;
+	): boolean;
+	_getIdentity(name: ProtocolAddress): PublicKey | null;
 }
 
 export abstract class SessionStore {
-	_saveSession(addr: ProtocolAddress, record: SessionRecord): Promise<void>;
-	_getSession(addr: ProtocolAddress): Promise<SessionRecord | null>;
+	_saveSession(addr: ProtocolAddress, record: SessionRecord): void;
+	_getSession(addr: ProtocolAddress): SessionRecord | null;
 }
 
 export abstract class PreKeyStore {
-	_savePreKey(preKeyId: number, record: PreKeyRecord): Promise<void>;
-	_getPreKey(preKeyId: number): Promise<PreKeyRecord>;
-	_removePreKey(preKeyId: number): Promise<void>;
+	_savePreKey(preKeyId: number, record: PreKeyRecord): void;
+	_getPreKey(preKeyId: number): PreKeyRecord;
+	_removePreKey(preKeyId: number): void;
 }
 
 export abstract class SignedPreKeyStore {
 	_saveSignedPreKey(
 		signedPreKeyId: number,
 		record: SignedPreKeyRecord
-	): Promise<void>;
-	_getSignedPreKey(signedPreKeyId: number): Promise<SignedPreKeyRecord>;
+	): void;
+	_getSignedPreKey(signedPreKeyId: number): SignedPreKeyRecord;
 }
 
 export abstract class KyberPreKeyStore {
 	_saveKyberPreKey(
 		kyberPreKeyId: number,
 		record: KyberPreKeyRecord
-	): Promise<void>;
-	_getKyberPreKey(kyberPreKeyId: number): Promise<KyberPreKeyRecord>;
-	_markKyberPreKeyUsed(kyberPreKeyId: number): Promise<void>;
+	): void;
+	_getKyberPreKey(kyberPreKeyId: number): KyberPreKeyRecord;
+	_markKyberPreKeyUsed(kyberPreKeyId: number): void;
 }
 
 export abstract class SenderKeyStore {
@@ -99,11 +99,11 @@ export abstract class SenderKeyStore {
 		sender: ProtocolAddress,
 		distributionId: Uuid,
 		record: SenderKeyRecord
-	): Promise<void>;
+	): void;
 	_getSenderKey(
 		sender: ProtocolAddress,
 		distributionId: Uuid
-	): Promise<SenderKeyRecord | null>;
+	): SenderKeyRecord | null;
 }
 
 export abstract class InputStream {

@@ -20,16 +20,16 @@ const chance = Chance();
 
 class InMemorySessionStore extends SignalClient.SessionStore {
   private state = new Map<string, Buffer>();
-  async saveSession(
+  saveSession(
     name: SignalClient.ProtocolAddress,
     record: SignalClient.SessionRecord
-  ): Promise<void> {
+  ): void {
     const idx = `${name.name()}::${name.deviceId()}`;
     this.state.set(idx, record.serialize());
   }
-  async getSession(
+  getSession(
     name: SignalClient.ProtocolAddress
-  ): Promise<SignalClient.SessionRecord | null> {
+  ): SignalClient.SessionRecord | null {
     const idx = `${name.name()}::${name.deviceId()}`;
     const serialized = this.state.get(idx);
     if (serialized) {
@@ -38,9 +38,9 @@ class InMemorySessionStore extends SignalClient.SessionStore {
       return null;
     }
   }
-  async getExistingSessions(
+  getExistingSessions(
     addresses: SignalClient.ProtocolAddress[]
-  ): Promise<SignalClient.SessionRecord[]> {
+  ): SignalClient.SessionRecord[] {
     return addresses.map((address) => {
       const idx = `${address.name()}::${address.deviceId()}`;
       const serialized = this.state.get(idx);
@@ -63,18 +63,18 @@ class InMemoryIdentityKeyStore extends SignalClient.IdentityKeyStore {
     this.localRegistrationId = localRegistrationId ?? 5;
   }
 
-  async getIdentityKey(): Promise<SignalClient.PrivateKey> {
+  getIdentityKey(): SignalClient.PrivateKey {
     return this.identityKey;
   }
-  async getLocalRegistrationId(): Promise<number> {
+  getLocalRegistrationId(): number {
     return this.localRegistrationId;
   }
 
-  async isTrustedIdentity(
+  isTrustedIdentity(
     name: SignalClient.ProtocolAddress,
     key: SignalClient.PublicKey,
     _direction: SignalClient.Direction
-  ): Promise<boolean> {
+  ): boolean {
     const idx = `${name.name()}::${name.deviceId()}`;
     const currentKey = this.idKeys.get(idx);
     if (currentKey) {
@@ -84,10 +84,10 @@ class InMemoryIdentityKeyStore extends SignalClient.IdentityKeyStore {
     }
   }
 
-  async saveIdentity(
+  saveIdentity(
     name: SignalClient.ProtocolAddress,
     key: SignalClient.PublicKey
-  ): Promise<boolean> {
+  ): boolean {
     const idx = `${name.name()}::${name.deviceId()}`;
     const currentKey = this.idKeys.get(idx);
     if (currentKey) {
@@ -99,9 +99,9 @@ class InMemoryIdentityKeyStore extends SignalClient.IdentityKeyStore {
     this.idKeys.set(idx, key);
     return false;
   }
-  async getIdentity(
+  getIdentity(
     name: SignalClient.ProtocolAddress
-  ): Promise<SignalClient.PublicKey | null> {
+  ): SignalClient.PublicKey | null {
     const idx = `${name.name()}::${name.deviceId()}`;
     return this.idKeys.get(idx) ?? null;
   }
@@ -109,33 +109,27 @@ class InMemoryIdentityKeyStore extends SignalClient.IdentityKeyStore {
 
 class InMemoryPreKeyStore extends SignalClient.PreKeyStore {
   private state = new Map<number, Buffer>();
-  async savePreKey(
-    id: number,
-    record: SignalClient.PreKeyRecord
-  ): Promise<void> {
+  savePreKey(id: number, record: SignalClient.PreKeyRecord): void {
     this.state.set(id, record.serialize());
   }
-  async getPreKey(id: number): Promise<SignalClient.PreKeyRecord> {
+  getPreKey(id: number): SignalClient.PreKeyRecord {
     const record = this.state.get(id);
     if (!record) {
       throw new Error(`pre-key ${id} not found`);
     }
     return SignalClient.PreKeyRecord.deserialize(record);
   }
-  async removePreKey(id: number): Promise<void> {
+  removePreKey(id: number): void {
     this.state.delete(id);
   }
 }
 
 class InMemorySignedPreKeyStore extends SignalClient.SignedPreKeyStore {
   private state = new Map<number, Buffer>();
-  async saveSignedPreKey(
-    id: number,
-    record: SignalClient.SignedPreKeyRecord
-  ): Promise<void> {
+  saveSignedPreKey(id: number, record: SignalClient.SignedPreKeyRecord): void {
     this.state.set(id, record.serialize());
   }
-  async getSignedPreKey(id: number): Promise<SignalClient.SignedPreKeyRecord> {
+  getSignedPreKey(id: number): SignalClient.SignedPreKeyRecord {
     const record = this.state.get(id);
     if (!record) {
       throw new Error(`pre-key ${id} not found`);
@@ -147,41 +141,38 @@ class InMemorySignedPreKeyStore extends SignalClient.SignedPreKeyStore {
 class InMemoryKyberPreKeyStore extends SignalClient.KyberPreKeyStore {
   private state = new Map<number, Buffer>();
   private used = new Set<number>();
-  async saveKyberPreKey(
-    id: number,
-    record: SignalClient.KyberPreKeyRecord
-  ): Promise<void> {
+  saveKyberPreKey(id: number, record: SignalClient.KyberPreKeyRecord): void {
     this.state.set(id, record.serialize());
   }
-  async getKyberPreKey(id: number): Promise<SignalClient.KyberPreKeyRecord> {
+  getKyberPreKey(id: number): SignalClient.KyberPreKeyRecord {
     const record = this.state.get(id);
     if (!record) {
       throw new Error(`kyber pre-key ${id} not found`);
     }
     return SignalClient.KyberPreKeyRecord.deserialize(record);
   }
-  async markKyberPreKeyUsed(id: number): Promise<void> {
+  markKyberPreKeyUsed(id: number): void {
     this.used.add(id);
   }
-  async hasKyberPreKeyBeenUsed(id: number): Promise<boolean> {
+  hasKyberPreKeyBeenUsed(id: number): boolean {
     return this.used.has(id);
   }
 }
 
 class InMemorySenderKeyStore extends SignalClient.SenderKeyStore {
   private state = new Map<string, SignalClient.SenderKeyRecord>();
-  async saveSenderKey(
+  saveSenderKey(
     sender: SignalClient.ProtocolAddress,
     distributionId: SignalClient.Uuid,
     record: SignalClient.SenderKeyRecord
-  ): Promise<void> {
+  ): void {
     const idx = `${distributionId}::${sender.name()}::${sender.deviceId()}`;
     this.state.set(idx, record);
   }
-  async getSenderKey(
+  getSenderKey(
     sender: SignalClient.ProtocolAddress,
     distributionId: SignalClient.Uuid
-  ): Promise<SignalClient.SenderKeyRecord | null> {
+  ): SignalClient.SenderKeyRecord | null {
     const idx = `${distributionId}::${sender.name()}::${sender.deviceId()}`;
     return this.state.get(idx) ?? null;
   }

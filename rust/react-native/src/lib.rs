@@ -84,7 +84,7 @@ pub fn init(rt: *mut jsi::sys::Runtime, call_invoker: cxx::SharedPtr<jsi::sys::C
     rt.global()
         .set(PropName::new("Libsignal", &mut rt), &host_object, &mut rt);
 
-    console_log("Hello from Rust!", &mut rt).ok();
+    console_log("[Libsignal] installed!", &mut rt).ok();
 }
 
 struct LibsignalAPI {

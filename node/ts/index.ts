@@ -1120,19 +1120,17 @@ export class UnidentifiedSenderMessageContent {
 }
 
 export abstract class SessionStore implements Native.SessionStore {
-  async _saveSession(
+  _saveSession(
     name: Native.ProtocolAddress,
     record: Native.SessionRecord
-  ): Promise<void> {
+  ): void {
     return this.saveSession(
       ProtocolAddress._fromNativeHandle(name),
       SessionRecord._fromNativeHandle(record)
     );
   }
-  async _getSession(
-    name: Native.ProtocolAddress
-  ): Promise<Native.SessionRecord | null> {
-    const sess = await this.getSession(ProtocolAddress._fromNativeHandle(name));
+  _getSession(name: Native.ProtocolAddress): Native.SessionRecord | null {
+    const sess = this.getSession(ProtocolAddress._fromNativeHandle(name));
     if (sess == null) {
       return null;
     } else {
@@ -1140,39 +1138,31 @@ export abstract class SessionStore implements Native.SessionStore {
     }
   }
 
-  abstract saveSession(
-    name: ProtocolAddress,
-    record: SessionRecord
-  ): Promise<void>;
-  abstract getSession(name: ProtocolAddress): Promise<SessionRecord | null>;
-  abstract getExistingSessions(
-    addresses: ProtocolAddress[]
-  ): Promise<SessionRecord[]>;
+  abstract saveSession(name: ProtocolAddress, record: SessionRecord): void;
+  abstract getSession(name: ProtocolAddress): SessionRecord | null;
+  abstract getExistingSessions(addresses: ProtocolAddress[]): SessionRecord[];
 }
 
 export abstract class IdentityKeyStore implements Native.IdentityKeyStore {
-  async _getIdentityKey(): Promise<Native.PrivateKey> {
-    const key = await this.getIdentityKey();
+  _getIdentityKey(): Native.PrivateKey {
+    const key = this.getIdentityKey();
     return key._nativeHandle;
   }
 
-  async _getLocalRegistrationId(): Promise<number> {
+  _getLocalRegistrationId(): number {
     return this.getLocalRegistrationId();
   }
-  async _saveIdentity(
-    name: Native.ProtocolAddress,
-    key: Native.PublicKey
-  ): Promise<boolean> {
+  _saveIdentity(name: Native.ProtocolAddress, key: Native.PublicKey): boolean {
     return this.saveIdentity(
       ProtocolAddress._fromNativeHandle(name),
       PublicKey._fromNativeHandle(key)
     );
   }
-  async _isTrustedIdentity(
+  _isTrustedIdentity(
     name: Native.ProtocolAddress,
     key: Native.PublicKey,
     sending: boolean
-  ): Promise<boolean> {
+  ): boolean {
     const direction = sending ? Direction.Sending : Direction.Receiving;
 
     return this.isTrustedIdentity(
@@ -1181,116 +1171,103 @@ export abstract class IdentityKeyStore implements Native.IdentityKeyStore {
       direction
     );
   }
-  async _getIdentity(
-    name: Native.ProtocolAddress
-  ): Promise<Native.PublicKey | null> {
-    const key = await this.getIdentity(ProtocolAddress._fromNativeHandle(name));
+  _getIdentity(name: Native.ProtocolAddress): Native.PublicKey | null {
+    const key = this.getIdentity(ProtocolAddress._fromNativeHandle(name));
     if (key == null) {
-      return Promise.resolve(null);
+      return null;
     } else {
       return key._nativeHandle;
     }
   }
 
-  abstract getIdentityKey(): Promise<PrivateKey>;
-  abstract getLocalRegistrationId(): Promise<number>;
-  abstract saveIdentity(
-    name: ProtocolAddress,
-    key: PublicKey
-  ): Promise<boolean>;
+  abstract getIdentityKey(): PrivateKey;
+  abstract getLocalRegistrationId(): number;
+  abstract saveIdentity(name: ProtocolAddress, key: PublicKey): boolean;
   abstract isTrustedIdentity(
     name: ProtocolAddress,
     key: PublicKey,
     direction: Direction
-  ): Promise<boolean>;
-  abstract getIdentity(name: ProtocolAddress): Promise<PublicKey | null>;
+  ): boolean;
+  abstract getIdentity(name: ProtocolAddress): PublicKey | null;
 }
 
 export abstract class PreKeyStore implements Native.PreKeyStore {
-  async _savePreKey(id: number, record: Native.PreKeyRecord): Promise<void> {
+  _savePreKey(id: number, record: Native.PreKeyRecord): void {
     return this.savePreKey(id, PreKeyRecord._fromNativeHandle(record));
   }
-  async _getPreKey(id: number): Promise<Native.PreKeyRecord> {
-    const pk = await this.getPreKey(id);
+  _getPreKey(id: number): Native.PreKeyRecord {
+    const pk = this.getPreKey(id);
     return pk._nativeHandle;
   }
-  async _removePreKey(id: number): Promise<void> {
+  _removePreKey(id: number): void {
     return this.removePreKey(id);
   }
 
-  abstract savePreKey(id: number, record: PreKeyRecord): Promise<void>;
-  abstract getPreKey(id: number): Promise<PreKeyRecord>;
-  abstract removePreKey(id: number): Promise<void>;
+  abstract savePreKey(id: number, record: PreKeyRecord): void;
+  abstract getPreKey(id: number): PreKeyRecord;
+  abstract removePreKey(id: number): void;
 }
 
 export abstract class SignedPreKeyStore implements Native.SignedPreKeyStore {
-  async _saveSignedPreKey(
-    id: number,
-    record: Native.SignedPreKeyRecord
-  ): Promise<void> {
+  _saveSignedPreKey(id: number, record: Native.SignedPreKeyRecord): void {
     return this.saveSignedPreKey(
       id,
       SignedPreKeyRecord._fromNativeHandle(record)
     );
   }
-  async _getSignedPreKey(id: number): Promise<Native.SignedPreKeyRecord> {
-    const pk = await this.getSignedPreKey(id);
+  _getSignedPreKey(id: number): Native.SignedPreKeyRecord {
+    const pk = this.getSignedPreKey(id);
     return pk._nativeHandle;
   }
 
-  abstract saveSignedPreKey(
-    id: number,
-    record: SignedPreKeyRecord
-  ): Promise<void>;
-  abstract getSignedPreKey(id: number): Promise<SignedPreKeyRecord>;
+  abstract saveSignedPreKey(id: number, record: SignedPreKeyRecord): void;
+  abstract getSignedPreKey(id: number): SignedPreKeyRecord;
 }
 
 export abstract class KyberPreKeyStore implements Native.KyberPreKeyStore {
-  async _saveKyberPreKey(
+  _saveKyberPreKey(
     kyberPreKeyId: number,
     record: Native.KyberPreKeyRecord
-  ): Promise<void> {
+  ): void {
     return this.saveKyberPreKey(
       kyberPreKeyId,
       KyberPreKeyRecord._fromNativeHandle(record)
     );
   }
-  async _getKyberPreKey(
-    kyberPreKeyId: number
-  ): Promise<Native.KyberPreKeyRecord> {
-    const prekey = await this.getKyberPreKey(kyberPreKeyId);
+  _getKyberPreKey(kyberPreKeyId: number): Native.KyberPreKeyRecord {
+    const prekey = this.getKyberPreKey(kyberPreKeyId);
     return prekey._nativeHandle;
   }
 
-  async _markKyberPreKeyUsed(kyberPreKeyId: number): Promise<void> {
+  _markKyberPreKeyUsed(kyberPreKeyId: number): void {
     return this.markKyberPreKeyUsed(kyberPreKeyId);
   }
 
   abstract saveKyberPreKey(
     kyberPreKeyId: number,
     record: KyberPreKeyRecord
-  ): Promise<void>;
-  abstract getKyberPreKey(kyberPreKeyId: number): Promise<KyberPreKeyRecord>;
-  abstract markKyberPreKeyUsed(kyberPreKeyId: number): Promise<void>;
+  ): void;
+  abstract getKyberPreKey(kyberPreKeyId: number): KyberPreKeyRecord;
+  abstract markKyberPreKeyUsed(kyberPreKeyId: number): void;
 }
 
 export abstract class SenderKeyStore implements Native.SenderKeyStore {
-  async _saveSenderKey(
+  _saveSenderKey(
     sender: Native.ProtocolAddress,
     distributionId: Native.Uuid,
     record: Native.SenderKeyRecord
-  ): Promise<void> {
+  ): void {
     return this.saveSenderKey(
       ProtocolAddress._fromNativeHandle(sender),
       uuid.stringify(distributionId),
       SenderKeyRecord._fromNativeHandle(record)
     );
   }
-  async _getSenderKey(
+  _getSenderKey(
     sender: Native.ProtocolAddress,
     distributionId: Native.Uuid
-  ): Promise<Native.SenderKeyRecord | null> {
-    const skr = await this.getSenderKey(
+  ): Native.SenderKeyRecord | null {
+    const skr = this.getSenderKey(
       ProtocolAddress._fromNativeHandle(sender),
       uuid.stringify(distributionId)
     );
@@ -1305,11 +1282,11 @@ export abstract class SenderKeyStore implements Native.SenderKeyStore {
     sender: ProtocolAddress,
     distributionId: Uuid,
     record: SenderKeyRecord
-  ): Promise<void>;
+  ): void;
   abstract getSenderKey(
     sender: ProtocolAddress,
     distributionId: Uuid
-  ): Promise<SenderKeyRecord | null>;
+  ): SenderKeyRecord | null;
 }
 
 export async function groupEncrypt(
